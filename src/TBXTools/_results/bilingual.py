@@ -47,7 +47,7 @@ class BilingualResults:
 
         Args:
             path: Path of the file to be saved.
-            reverse: (bool, optional): If True, swaps the column order and entries 
+            reverse: (bool, optional): If True, swaps the column order and entries.
             (target language first, source language second). Defaults to False.
         
         Raises:
