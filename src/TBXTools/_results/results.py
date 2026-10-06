@@ -117,7 +117,9 @@ class Results:
     
     def nest_normalization(self, percent=10, verbose=False):
         '''
-        Normalizes candidate term frequencies by accounting for nested subterms. It reduces the frequency of terms that appear inside longer candidate terms. A frequency compatibility interval (±percent%) is defined around each candidate term's frequency. The frequency of a nested term is only subtracted from the base term if it falls within this interval. Terms whose normalized frequency drops to 0 are removed from the final list.
+        Normalizes candidate term frequencies by accounting for nested subterms.
+        
+        It reduces the frequency of terms that appear inside longer candidate terms. A frequency compatibility interval (±percent%) is defined around each candidate term's frequency. The frequency of a nested term is only subtracted from the base term if it falls within this interval. Terms whose normalized frequency drops to 0 are removed from the final list.
 
         Args:
             percent: The frequency compatibility interval that is used to calculate if a term is nested inside another.
@@ -140,7 +142,7 @@ class Results:
         '''
         candidate_terms = self._terms
 
-        filtered_terms = self._methodology.processor.lemmatization(candidate_terms=candidate_terms, verbose=verbose)
+        filtered_terms = self._methodology.postprocessor.lemmatization(candidate_terms=candidate_terms, verbose=verbose)
         
         self._extractor._sqlite.delete("candidate_terms")
         self._extractor._sqlite.insert_candidate_terms(filtered_terms)
@@ -167,7 +169,7 @@ class Results:
             return
 
         candidate_terms = self._terms
-        filtered_terms = self._methodology.processor.apply_tsr_filter(tsr_terms=tsr_terms, candidate_terms=candidate_terms, mode=mode, max_iterations= max_iterations, debug=debug)
+        filtered_terms = self._methodology.postprocessor.apply_tsr_filter(tsr_terms=tsr_terms, candidate_terms=candidate_terms, mode=mode, max_iterations= max_iterations, debug=debug)
         
         self._terms = filtered_terms
         self._extractor._sqlite.delete("candidate_terms") 
@@ -179,8 +181,8 @@ class Results:
         Remove candidate terms that match regex expressions.
 
         Args:
-            regexes: regular expression patterns used to match and filter out unwanted terms.
-            mode: 'strict' removes full string matches, 'flexible' removes candidates that contain the regex. Defaults to 'strict'.
+            regexes: Regular expression patterns used to match and filter out unwanted terms.
+            mode: Change the behaviour of the function, 'strict' removes full string matches, 'flexible' removes candidates that contain the regex. Defaults to 'strict'.
             verbose (bool, optional): Prints the process in the console. Default to False.
         '''
         
@@ -296,13 +298,13 @@ class Results:
                 is_upper = term.isupper()
 
                 if not is_upper:
-                    term = self._methodology.processor.lemmatize_term(term)
+                    term = self._methodology.postprocessor.lemmatize_term(term)
     
                 normalized_terms.append((term, row[1], row[2], row[3]))
 
             elif len(split_term) > 1:
                 
-                term = self._methodology.processor.lemmatize_term(term)
+                term = self._methodology.postprocessor.lemmatize_term(term)
                 normalized_terms.append((term, row[1], row[2], row[3]))
         
         self._extractor._sqlite.delete("candidate_terms")
