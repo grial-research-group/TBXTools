@@ -2,9 +2,9 @@ from TBXTools._results.bilingual import BilingualResults
 
 class BilingualExtractor:
     """
-    Class to manage the bilingual terminology extraction pipeline. This class initializes two Extractor objects, source and target, and passes each argument respectively to each of them.
+    Class to manage the bilingual terminology extraction pipeline. 
 
-    Some arguments should be passed as tuples with the source on the left and target on the right, e.g. 'language=('en', 'ca') or 'corpus=("mental_health_en.txt", "mental_health_ca.txt")'. These arguments are: methodology, language, corpus stopwords, and inner_stopwords.
+    This class initializes two Extractor objects, source and target, and passes each argument respectively to each of them. Some arguments should be passed as tuples with the source on the left and target on the right, e.g. 'language=('en', 'ca') or 'corpus=("mental_health_en.txt", "mental_health_ca.txt")'. These arguments are: methodology, language, corpus stopwords, and inner_stopwords.
 
     Attributes:
         project_name (str): The unique name identifier for the current project. It determines the filename of the generated SQLite database.
@@ -16,7 +16,7 @@ class BilingualExtractor:
         overwrite_project (bool): If True, overwrites existing project data in the database.
     """
 
-    def __init__(self, project_name, methodology, language, corpus=None, stopwords=None, inner_stopwords=None, overwrite_project=False):
+    def __init__(self, project_name, methodology, language, corpus=None, stopwords=None, inner_stopwords=None, overwrite_project=False,):
         from .extractor import Extractor
         from .._processor.file_parser import FileParser
         from .._utils.utils import get_lang
@@ -31,11 +31,10 @@ class BilingualExtractor:
 
         self.parser = FileParser(
             src_lang=self._src_lang_code,
-            tgt_lang=self._tgt_lang_code
+            tgt_lang=self._tgt_lang_code,
         )
 
-        src_corpus, tgt_corpus = self.parser.parse(
-            corpus=corpus)
+        src_corpus, tgt_corpus = self.parser.parse(corpus=corpus)
         
         self.src_extractor = Extractor(
             project_name=f"{project_name}-{self._src_lang_code}",
