@@ -1,6 +1,5 @@
 from .._sqlite.sqlite import SQLite
 from .._results.results import Results
-from .._processor.preprocessor import Preprocessor
 from .._utils.utils import get_lang
 from .._processor.file_parser import FileParser
 import time
@@ -34,12 +33,9 @@ class Extractor:
             stopwords=stopwords,
             inner_stopwords=inner_stopwords,
             corpus=_corpus,
-            is_corpus_tagged=getattr(
-                self._methodology, 'is_corpus_tagged', False),
-            linguistic_patterns=getattr(
-                self._methodology, 'linguistic_patterns', None),
-            evaluation_terms=getattr(
-                self._methodology, 'evaluation_terms', None),
+            is_corpus_tagged=getattr(self._methodology, 'is_corpus_tagged', False),
+            linguistic_patterns=getattr(self._methodology, 'linguistic_patterns', None),
+            evaluation_terms=getattr(self._methodology, 'evaluation_terms', None),
             overwrite_project=overwrite_project,
             lang_code=self._lang_code,
             lang=self.lang
