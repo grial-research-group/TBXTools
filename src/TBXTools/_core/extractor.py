@@ -5,41 +5,44 @@ from .._utils.utils import get_lang
 from .._processor.file_parser import FileParser
 import time
 
+
 class Extractor:
     """
-    Orchestrates the terminology extraction pipeline. This class acts as the main controller, managing the integration between the chosen extraction methodology, database storage, and text preprocessing components.
+    Class to manage the monolingual terminology extraction pipeline. This class acts as the main controller, managing the interaction between the chosen extraction methodology, database storage, and processing components.
 
     Attributes:
-        methodology (object): The extraction strategy instance (e.g., LinguisticExtractor or StatisticalExtractor).
-        project_name (str): The unique name identifier for the current extraction project, which also determines the filename of the generated SQLite database.
-        tagged_corpus: The tagged corpus used as the source for terminology extraction (in the case of linguistic extraction).
-        corpus: The text corpus used as the source for terminology extraction (in the case of statistical extraction).
-        language (str): The language of the corpus text (e.g., "english").
-        linguistic_patterns (str, optional): File path to the POS patterns (used only for linguistic extraction).
+        project_name (str): The unique name identifier for the current project. It determines the filename of the generated SQLite database.
+        methodology (object): The extraction strategy instance (e.g., LinguisticExtractor).
+        language (str): The language of the corpus text. Can be the name of the language or the ISO code (e.g., 'english' or 'en').
+        corpus: The  corpus used as the source for terminology extraction.
+        stopwords (list): Stopwords list. They are automatically chosen if none are passed. It accepts a file path or a list of strings.
+        inner_stopwords (list): Inner stopwords list. Used to filter multiword terms. They are automatically chosen if the language is es, ca, en, or fr. It accepts a file path or a list of strings.
         overwrite_project (bool): If True, overwrites existing project data in the database.
-        _sqlite (SQLiteManager): Internal component to manage database interactions.
     """
 
-    def __init__(self, project_name, methodology, corpus=None, stopwords=None, inner_stopwords=None, language=None, overwrite_project=False):
-        
+    def __init__(self, project_name, methodology, language, corpus=None, stopwords=None, inner_stopwords=None, overwrite_project=False):
+
         self.lang, self._lang_code = get_lang(language.lower())
         self._methodology = methodology
         self.parser = FileParser(src_lang=self._lang_code)
-        corpus_generator = self.parser.corpus_generator(corpus=corpus)
-
+        _corpus = self.parser.parse(corpus=corpus)
+        
         self._sqlite = SQLite(
-            project_name=project_name, 
-            stopwords=stopwords, 
-            inner_stopwords=inner_stopwords, 
-            corpus=corpus_generator,
-            is_corpus_tagged=getattr(self._methodology,'is_corpus_tagged', False),
-            linguistic_patterns=getattr(self._methodology, 'linguistic_patterns', None),
-            evaluation_terms=getattr(self._methodology,'evaluation_terms', None),
+            project_name=project_name,
+            stopwords=stopwords,
+            inner_stopwords=inner_stopwords,
+            corpus=_corpus,
+            is_corpus_tagged=getattr(
+                self._methodology, 'is_corpus_tagged', False),
+            linguistic_patterns=getattr(
+                self._methodology, 'linguistic_patterns', None),
+            evaluation_terms=getattr(
+                self._methodology, 'evaluation_terms', None),
             overwrite_project=overwrite_project,
             lang_code=self._lang_code,
             lang=self.lang
-            )
-        
+        )
+
         self.stopwords = self._sqlite.get("stopwords")
         self.inner_stopwords = self._sqlite.get("inner_stopwords")
 
@@ -56,10 +59,11 @@ class Extractor:
         Returns:
             Results: An instance of the Results class.
         '''
-        
+
         self._methodology.extractor = self
 
-        if self._sqlite.overwrite_project == False and self._sqlite.table_is_populated("candidate_terms"): # if we are not overwriting and the calculations have been done
+        # if we are not overwriting and the calculations have been done
+        if self._sqlite.overwrite_project == False and self._sqlite.table_is_populated("candidate_terms"):
             print("Fetching data from database", flush=True)
             candidate_terms = self._sqlite.get_candidate_terms()
             ngrams = self._sqlite.get_ngrams()
@@ -68,24 +72,25 @@ class Extractor:
             linguistic_patterns = self._sqlite.get("linguistic_patterns")
 
             results = Results(
-                terms=candidate_terms, 
-                ngrams=ngrams if ngrams else None, 
-                tokens=tokens, 
+                terms=candidate_terms,
+                ngrams=ngrams if ngrams else None,
+                tokens=tokens,
                 tagged_ngrams=tagged_ngrams if tagged_ngrams else None,
                 linguistic_patterns=linguistic_patterns if linguistic_patterns else None
-                )
+            )
 
         else:
             print(f"\n{self._methodology.name} initialized", flush=True)
             print("Running term extraction", flush=True)
 
-            segments = list(self._sqlite.get_segments(tagged=False)) #need to change when using yield in get segments
+            # need to change when using yield in get segments
+            segments = list(self._sqlite.get_segments(tagged=False))
 
             results = self._methodology.run(segments=segments, verbose=verbose)
 
-            self._sqlite.insert_candidate_terms(results._terms)   
+            self._sqlite.insert_candidate_terms(results._terms)
 
-        results._extractor = self  
+        results._extractor = self
         results._methodology = self._methodology
 
         print("Term extraction finished", flush=True)
@@ -96,7 +101,7 @@ class Extractor:
             print(f"\nExtraction time: {length:.3f} seconds")
 
         return results
-    
+
     def add_stopwords(self, stopwords_list):
         '''
         Adds standard stopwords to the project and updates the processor. Inserts the provided list of stopwords into the SQLite database and refreshes the internal processor's active stopword list.
@@ -107,7 +112,8 @@ class Extractor:
         if isinstance(stopwords_list, list):
             self._sqlite.add_stopwords(stopwords_list=stopwords_list)
             self.stopwords = self._sqlite.get("stopwords")
-            self._methodology.processor.stopwords = self.stopwords# updating the attribute of the class
+            # updating the attribute of the class
+            self._methodology.processor.stopwords = self.stopwords
 
     def add_inner_stopwords(self, inner_stopwords_list):
         '''
@@ -117,6 +123,8 @@ class Extractor:
             inner_stopwords_list (list[str]): A list of inner stopwords.
         '''
         if isinstance(inner_stopwords_list, list):
-            self._sqlite.add_inner_stopwords(inner_stopwords_list=inner_stopwords_list)
-            self._methodology.processor.inner_stopwords = self._sqlite.get("inner_stopwords")
+            self._sqlite.add_inner_stopwords(
+                inner_stopwords_list=inner_stopwords_list)
+            self._methodology.processor.inner_stopwords = self._sqlite.get(
+                "inner_stopwords")
             self.inner_stopwords = self._sqlite.get("inner_stopwords")
