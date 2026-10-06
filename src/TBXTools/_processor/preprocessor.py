@@ -1,6 +1,5 @@
 import re
 
-
 class Preprocessor():
 
     def __init__(self, methodology):

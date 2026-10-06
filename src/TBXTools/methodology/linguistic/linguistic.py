@@ -1,9 +1,6 @@
 import re
-from collections import Counter
-
 
 class LinguisticMethodology():
-
     '''
     Manages linguistic terminology extraction.
 
