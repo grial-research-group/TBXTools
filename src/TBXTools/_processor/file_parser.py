@@ -9,40 +9,46 @@ class FileParser:
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
 
-    def corpus_generator(self, corpus):
+        self.corpus = None
+
+    def parse(self, corpus):
         if corpus:
 
-            if isinstance(corpus, Generator): # temporary? fix for bilingual extraction
+            if isinstance(corpus, Generator):  # for bilingual extraction
                 return corpus
-            
+
+            # parsing a list of corpora or a list of segments
+            elif isinstance(corpus, list):
+                return self._parse_list(corpus_list=corpus)                 
+
             # parsing moses or 2 separate txt files
-            if isinstance(corpus, (tuple, list)) and len(corpus) == 2:
+            elif isinstance(corpus, tuple) and len(corpus) == 2:
                 src_file, tgt_file = corpus
 
-                src_corpus = (src for src in self._parse_txt(src_file))
-                tgt_corpus = (tgt for tgt in self._parse_txt(tgt_file))
+                src_corpus_gen = (src for src in self._parse_txt(src_file))
+                tgt_corpus_gen = (tgt for tgt in self._parse_txt(tgt_file))
 
-                return src_corpus, tgt_corpus
-            
-            else:  # parsing tsv and tmx (bilingual)
+                return (src_corpus_gen, tgt_corpus_gen)
+
+            else:  # parsing bilingual
                 ext = Path(corpus).suffix.lower()
-                if ext in [".tab", ".tsv"]:
-                    src_corpus = (src for src, tgt in self._parse_tsv(corpus))
-                    tgt_corpus = (tgt for src, tgt in self._parse_tsv(corpus))
-                    
-                    return src_corpus, tgt_corpus
+                if ext in [".tab", ".tsv"]:  # parsing tsv
+                    src_corpus_gen = (src for src, tgt in self._parse_tsv(corpus))
+                    tgt_corpus_gen = (tgt for src, tgt in self._parse_tsv(corpus))
 
-                elif ext == ".tmx": # parsing tmx (bilingual)
-                    src_corpus = (src for src, tgt in self._parse_tmx(corpus))
-                    tgt_corpus = (tgt for src, tgt in self._parse_tmx(corpus))
+                    return (src_corpus_gen, tgt_corpus_gen)
 
-                    return src_corpus, tgt_corpus
+                elif ext == ".tmx":  # parsing tmx
+                    src_corpus_gen = (src for src, tgt in self._parse_tmx(corpus))
+                    tgt_corpus_gen = (tgt for src, tgt in self._parse_tmx(corpus))
 
-                elif ext == ".txt": # parsing monolingual txt
-                    monolingual_corpus = (seg for seg in self._parse_txt(corpus))
+                    return (src_corpus_gen, tgt_corpus_gen)
 
-                    return monolingual_corpus
-                
+                elif ext == ".txt":  # parsing monolingual txt
+                    monolingual_corpus_gen = (seg for seg in self._parse_txt(corpus))
+
+                    return monolingual_corpus_gen
+
                 else:
                     raise ValueError(
                         f"Unsupported file format: {ext}. Supported formats: moses, txt, tsv and tmx")
@@ -90,3 +96,23 @@ class FileParser:
                 if clean_line:
 
                     yield clean_line
+
+    
+    def _parse_list(self, corpus_list):
+
+        if corpus_list:
+            if isinstance(corpus_list, list):
+                if Path(corpus_list[0]).is_file():
+                    is_file = True
+                else:
+                    is_file = False
+
+                if is_file:
+                    corpora_generators = []
+                    for file in corpus_list:
+                        corpora_generators.append(self.parse(corpus=file))
+
+                    return corpora_generators
+
+                else:
+                    return corpus_list

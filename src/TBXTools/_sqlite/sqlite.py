@@ -18,7 +18,6 @@ class SQLite:
 
         self.TABLES_TO_LOAD_AT_START = ["corpus", "tagged_corpus", "stopwords", "inner_stopwords", "linguistic_patterns", "evaluation_terms", "external_terms"]
         
-        self.TABLES_LOADED = []
         self.descriptive_statistics_data = {}
         
         self.lang = lang
@@ -134,8 +133,22 @@ class SQLite:
         
         if corpus:
             if isinstance(corpus, Generator):
-                    self.read_corpus(corpus_generator=corpus, is_corpus_tagged=is_corpus_tagged)
+                self.read_corpus(corpus_generator=corpus, is_corpus_tagged=is_corpus_tagged)
+
+                print("Corpus loaded", flush=True)
             
+            elif isinstance(corpus, list):
+                if isinstance(corpus[0], Generator):
+                    for corpus_gen in corpus:
+                        self.read_corpus(corpus_generator=corpus_gen, is_corpus_tagged=is_corpus_tagged)
+
+                    print(f"{len(corpus)} corpora loaded", flush=True)
+
+                else:
+                    self.read_corpus(corpus_generator=corpus)
+
+                    print("Segments loaded", flush=True)
+           
             else:
                 raise ValueError("Corpus is not a Generator object")
             
@@ -182,7 +195,6 @@ class SQLite:
             self.cur.executemany("INSERT INTO inner_stopwords (inner_stopword) VALUES (?)",data) 
 
     def load_linguistic_patterns(self, linguistic_patterns, encoding="utf-8"):
-
         data= []
 
         if linguistic_patterns:
@@ -560,8 +572,6 @@ class SQLite:
             # if the table does not have data, it is loaded in
             if loader and not self.table_is_populated(table_name=table):
                 loader()
-                self.TABLES_LOADED.append(table)
-
 
     def calculate_descriptive_statistics(self):
         tables = ["corpus", "candidate_terms"]
