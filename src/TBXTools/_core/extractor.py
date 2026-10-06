@@ -8,7 +8,9 @@ import time
 
 class Extractor:
     """
-    Class to manage the monolingual terminology extraction pipeline. This class acts as the main controller, managing the interaction between the chosen extraction methodology, database storage, and processing components.
+    Class to manage the monolingual terminology extraction pipeline. 
+    
+    This class acts as the main controller, managing the interaction between the chosen extraction methodology, database storage, and processing components.
 
     Attributes:
         project_name (str): The unique name identifier for the current project. It determines the filename of the generated SQLite database.
