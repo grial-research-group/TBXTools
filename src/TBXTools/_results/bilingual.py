@@ -1,5 +1,5 @@
 from .._processor.aligner import Aligner
-from .._utils.utils import get_lang
+from .._helpers.helpers import get_lang
 
 class BilingualResults:
     

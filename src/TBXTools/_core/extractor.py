@@ -1,6 +1,6 @@
 from .._sqlite.sqlite import SQLite
 from .._results.results import Results
-from .._utils.utils import get_lang
+from .._helpers.helpers import get_lang
 from .._processor.file_parser import FileParser
 import time
 

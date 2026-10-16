@@ -1,4 +1,4 @@
-from .._utils.utils import get_spacy_model_from_code
+from .._helpers.helpers import get_spacy_model_from_code
 from tqdm import tqdm
 import re
 
@@ -86,7 +86,7 @@ class Postprocessor:
         
         from spacy.tokens import Doc 
 
-        from .._utils.utils import load_spacy_model
+        from .._helpers.helpers import load_spacy_model
         
         if self.lang_code and not self.model_name:
 

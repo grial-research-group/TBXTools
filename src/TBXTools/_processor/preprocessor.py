@@ -154,7 +154,7 @@ class Preprocessor():
         Returns:
           tagged_segments (list of str): A list of POS tagged segments.
         """
-        from .._utils.utils import get_spacy_model_from_code, load_spacy_model
+        from .._helpers.helpers import get_spacy_model_from_code, load_spacy_model
         from ..methodology.linguistic.tagger import LinguisticTagger
         from tqdm import tqdm
 

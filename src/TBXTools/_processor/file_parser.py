@@ -1,5 +1,5 @@
 from xml.etree import ElementTree as etree
-from TBXTools._utils.utils import get_lang
+from .._helpers.helpers import get_lang
 from pathlib import Path
 from typing import Generator
 
@@ -16,6 +16,8 @@ class FileParser:
 
             if isinstance(corpus, Generator):  # for bilingual extraction
                 return corpus
+
+            # elif isinstance(corpus, _SplitCorpus)
 
             # parsing a list of corpora or a list of segments
             elif isinstance(corpus, list):

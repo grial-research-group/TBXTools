@@ -19,7 +19,7 @@ class BilingualExtractor:
     def __init__(self, project_name, methodology, language, corpus=None, stopwords=None, inner_stopwords=None, overwrite_project=False,):
         from .extractor import Extractor
         from .._processor.file_parser import FileParser
-        from .._utils.utils import get_lang
+        from .._helpers.helpers import get_lang
 
         src_methodology, tgt_methodology = methodology
         src_stopwords, tgt_stopwords = stopwords if stopwords else None, None
