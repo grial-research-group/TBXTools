@@ -1,6 +1,6 @@
 import pandas as pd
 from tqdm import tqdm
-from .._utils.utils import get_spacy_model_from_code
+from .._helpers.helpers import get_spacy_model_from_code, load_spacy_model
 import string
 
 class BertProcessor():
@@ -49,11 +49,7 @@ class BertProcessor():
         return AutoModelForTokenClassification.from_pretrained(self.model_name, num_labels=len(self._labeling_scheme_list), id2label=self._id2label, label2id=self._label2id)
     
     def choose_labels(self, labeling_scheme):
-        if not labeling_scheme: # default
-            self.labeling_scheme = "BIO"
-            self._labeling_scheme_list = ['O', 'B', 'I']
-
-        elif labeling_scheme.upper() == "BIO":
+        if not labeling_scheme or labeling_scheme.upper() == "BIO":
             self.labeling_scheme = "BIO"
             self._labeling_scheme_list = ['O', 'B', 'I']
             
@@ -87,13 +83,12 @@ class BertProcessor():
         # return tokens_FD, df
         return df
     
-    def annotate(self, segments, external_terms):
+    def annotate(self, segments, external_terms, spacy_model_size="sm"):
         '''
         Runs the whole annotation process.
         '''
-        import spacy
-        spacy_model = get_spacy_model_from_code(self.lang_code)
-        nlp = spacy.load(spacy_model)
+        spacy_model = get_spacy_model_from_code(self.lang_code, size=spacy_model_size)
+        nlp = load_spacy_model(spacy_model)
 
         word_tokens, lemmas = self._lemmatize_segments(nlp, segments) # with spacy
 
@@ -108,8 +103,8 @@ class BertProcessor():
         return df
 
     def preprocess_test(self, segments):
-        import spacy
-        nlp = spacy.load(get_spacy_model_from_code(self.lang_code))
+        spacy_model = get_spacy_model_from_code(self.lang_code)
+        nlp = load_spacy_model(spacy_model)
         word_tokens = []
 
         # use a proper function
@@ -146,6 +141,7 @@ class BertProcessor():
         return word.strip(self.punctuation).lower()
     
     def strip_stopwords(self, term):
+        # we can maybe use filter_ngram from the preprocessor
         term = term.strip(string.punctuation + " ")
         words = term.split()
 
@@ -158,6 +154,7 @@ class BertProcessor():
         return " ".join(words).strip(string.punctuation + " ")
 
     def process_predictions(self, predicted_candidates):
+        # we can maybe use clean_ngram from the preprocessor
         '''Light postprocessing that removes stopwords at the beginning or end of the candidate term. Terms that are solely quotation marks ("") are also removed.
         
         The function takes a list of lists of terms.'''
