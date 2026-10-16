@@ -1,2 +1,2 @@
-from .train_val_test_split import train_val_test_split
+from .train_val_test_split import train_test_split
 from .merge_databases import merge_databases

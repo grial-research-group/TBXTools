@@ -1,9 +1,8 @@
 class _SplitCorpus():
 
-    def __init__(self, train, val, test):
+    def __init__(self, train, test):
 
         self.train = train
-        self.val = val
         self.test = test
 
     def save(self, split=None):
@@ -12,28 +11,51 @@ class _SplitCorpus():
             # save self.train
             pass
 
-def train_val_test_split(corpus, train_size=0.7, val_size=0.15, test_size=0.15, seed=123):
+def train_test_split(corpus, stream=False, train_size=0.85, test_size=0.15, seed=123):
 
-    if train_size + val_size + test_size != 1:
+    if train_size + test_size != 1:
         raise ValueError("Split sizes do not sum up to 1")
 
     import random
-    random.seed(seed)
-    segments = []
-    
-    with open(corpus, "r", encoding="utf-8") as f: # falta normalizar etc.
-        for line in f:
-            segments.append(line)
 
-    test_segs = random.sample(segments, round(len(segments) * test_size))
-    rest = list(set(segments) - set(test_segs))
-    val_segs = random.sample(rest, round(len(segments) * val_size)) 
-    train_segs = list(set(rest) - set(val_segs))
+    if stream:
+        def _split_generator(target_split):
+            
+            with open(corpus, "r", encoding="utf-8") as f: # falta normalizar etc.
+                for i, line in enumerate(f):
 
-    print(f"Split results: train - {len(train_segs)} | val - {len(val_segs)} | test - {len(test_segs)}\n", flush=True)
+                    random_num = random.Random(f"{seed}_{i}")
+                    roll = random_num.random()
 
-    return _SplitCorpus(
-        train=train_segs,
-        val=val_segs,
-        test=test_segs,
-    )
+                    if roll < train_size:
+                        split = "train"
+                    else:
+                        split = "test"
+
+                    if split == target_split:
+                        yield line
+
+        # print("Streaming enabled. Corpus split sizes will be approximate", flush=True)
+
+        return _SplitCorpus(
+            train=_split_generator("train"),
+            test=_split_generator("test"),
+        )
+
+    else:
+        random.seed(seed)
+        segments = []
+        
+        with open(corpus, "r", encoding="utf-8") as f:
+            for line in f:
+                segments.append(line)
+
+        test_segs = random.sample(segments, round(len(segments) * test_size))
+        train_segs = list(set(segments) - set(test_segs))
+
+        # print(f"Corpus split results: train - {len(train_segs)} | test - {len(test_segs)}\n", flush=True)
+
+        return _SplitCorpus(
+            train=test_segs,
+            test=train_segs,
+        )
