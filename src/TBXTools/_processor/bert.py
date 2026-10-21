@@ -5,14 +5,14 @@ import string
 
 class BertProcessor():
 
-    def __init__(self):
+    def __init__(self, methodology):
+        self.methodology = methodology
         self.model_name = None
         self.stopwords = None
         self.inner_stopwords = None
         self.lang_code = None
         self.punctuation = string.punctuation
 
-        self.methodology = None
         self.model = None # maybe a Model class with model.tokenizer model.data_collator etc.
         self.tokenizer = None
         self.data_collator = None
