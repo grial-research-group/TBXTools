@@ -21,7 +21,7 @@ class StatisticalMethodology():
 
         self.extractor = None
         self.preprocessor = Preprocessor(methodology=self)
-        self.postprocessor = Postprocessor()
+        self.postprocessor = Postprocessor(methodology=self)
 
     def run(self, segments, verbose=False):
         from ..._results.results import Results
