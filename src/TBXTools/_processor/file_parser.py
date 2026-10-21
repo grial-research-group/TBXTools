@@ -99,22 +99,24 @@ class FileParser:
 
                     yield clean_line
 
-    
     def _parse_list(self, corpus_list):
-
         if corpus_list:
-            if isinstance(corpus_list, list):
-                if Path(corpus_list[0]).is_file():
-                    is_file = True
-                else:
+            is_file = False
+            first_item = str(corpus_list[0])
+            
+            if len(first_item) < 4096:
+                try:
+                    is_file = Path(first_item).is_file()
+                except OSError:
                     is_file = False
 
-                if is_file:
-                    corpora_generators = []
-                    for file in corpus_list:
-                        corpora_generators.append(self.parse(corpus=file))
+            if is_file:
+                corpora_generators = []
+                for file in corpus_list:
+                    corpora_generators.append(self.parse(corpus=file))
+                return corpora_generators
+            else:
+                return corpus_list
 
-                    return corpora_generators
-
-                else:
-                    return corpus_list
+    def parse_conll(self, file):
+        pass
