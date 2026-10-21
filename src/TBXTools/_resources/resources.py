@@ -31,4 +31,4 @@ class Resources:
             return lang_class.Defaults.stop_words
             
         except ImportError:
-            raise ValueError(f"Cannot import stopwords because {self.lang} ({self.lang_code}) is not supported in spaCy. You must pass an external list of stopwords to Extractor using the 'stopwords' argument.")
+            raise ValueError(f"Cannot import stopwords because language {self.lang} ({self.lang_code}) is not supported in spaCy. You must pass an external list of stopwords to Extractor using the 'stopwords' argument.")
