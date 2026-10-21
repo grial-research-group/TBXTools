@@ -58,6 +58,9 @@ class Extractor:
         Returns:
             Results: An instance of the Results class.
         '''
+        if timer:
+            import time
+            start = time.time()
 
         self._methodology.extractor = self
 
@@ -96,7 +99,7 @@ class Extractor:
 
         if timer:
             end = time.time()
-            length = end - self._methodology.start
+            length = end - start
             print(f"\nExtraction time: {length:.3f} seconds")
 
         return results

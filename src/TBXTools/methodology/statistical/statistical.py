@@ -12,9 +12,6 @@ class StatisticalMethodology():
     def __init__(self, nmin, nmax, case_normalization=True, min_freq=2):
         from ..._processor.postprocessor import Postprocessor
         from ..._processor.preprocessor import Preprocessor
-        import time
-
-        self.start = time.time()
 
         self.name = "StatisticalMethodology"
         self.case_normalization = case_normalization
