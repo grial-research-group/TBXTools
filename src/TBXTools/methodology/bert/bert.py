@@ -19,8 +19,7 @@ class BertMethodology(BaseMethodology):
         self.name = "BertMethodology"
         self.model_name = model
 
-        self.processor = BertProcessor()
-        self.processor.methodology = self
+        self.processor = BertProcessor(methodology=self)
         self.extractor = None
         self.processor.choose_labels(labeling_scheme=labeling_scheme)
 
