@@ -1,11 +1,11 @@
 from .._helpers.helpers import get_spacy_model_from_code
 from tqdm import tqdm
-import re
 
 class Postprocessor:
-
-    '''Manages the text preprocessing pipeline for terminology extraction. This class
-    provides methods for tokenizing text segments, applying lemmatization, case and nest normalizations, and filtering candidate terms using stopwords and regular expressions.
+    '''
+    Manages the text preprocessing pipeline for terminology extraction. 
+    
+    This class provides methods for tokenizing text segments, applying lemmatization, case and nest normalizations, and filtering candidate terms using stopwords and regular expressions.
 
     Attributes:
         stopwords (list/set): A collection of standard words to filter out.
@@ -17,14 +17,10 @@ class Postprocessor:
         nlp: The NLP pipeline or model used for text processing.
     '''
 
-    def __init__(self):
+    def __init__(self, methodology):
         self.nmin = None
         self.nmax = None
-        self.lang_code = None
-        self.model_name = None
-        self.nlp = None
 
-    
     def case_normalization(self, candidate_terms, verbose=False):
         '''
         Performs case normalization on candidate terms while preserving acronyms. Converts candidate terms to lowercase except for uppercase tokens (e.g acronyms like 'ADH1B' or 'ADHD'). If a capitalized term exists as non-capitalized, the capitalized one will be deleted and the frequency of the non-capitalized one will be increased by the frequency of the capitalized.
@@ -72,7 +68,7 @@ class Postprocessor:
 
         return normalized_terms
     
-    def lemmatization(self, candidate_terms, verbose=False):
+    def lemmatization(self, candidate_terms, lang_code, verbose=False):
         '''
         Performs lemmatization. Applies lemmatization to all candidate terms and merges duplicates by summing their frequencies.
 
@@ -84,14 +80,11 @@ class Postprocessor:
           normalized_terms: A new list of tuple after applying lemmatization.
         '''
         
-        from spacy.tokens import Doc 
-
+        from spacy.tokens import Doc
         from .._helpers.helpers import load_spacy_model
         
-        if self.lang_code and not self.model_name:
-
-            self.model_name = get_spacy_model_from_code(self.lang_code)
-            self.nlp = load_spacy_model(self.model_name)
+        model_name = get_spacy_model_from_code(lang_code)
+        nlp = load_spacy_model(model_name)
             
         freq_dict = {}
 
@@ -99,11 +92,11 @@ class Postprocessor:
             term = terms_row[0].strip()
             freq = terms_row[3]
 
-            words = term.split() #is this necesary? Doc probably splits already, if we split then I THINK words like l'estat dont get tokenized and lemmatized like spaCy does
+            words = term.split()
 
-            doc = Doc(self.nlp.vocab, words=words)
+            doc = Doc(nlp.vocab, words=words)
 
-            for name, proc in self.nlp.pipeline:
+            for name, proc in nlp.pipeline:
                 doc = proc(doc)
 
             lemmatized_term = " ".join([token.lemma_.strip() for token in doc])
@@ -127,7 +120,9 @@ class Postprocessor:
         
     def nest_normalization(self, candidate_terms, percent=10, verbose=False):
         """
-        Normalizes candidate term frequencies by accounting for nested subterms. Reduces the frequency of terms that appear inside longer candidate terms. A frequency compatibility interval (±percent%) is defined around each candidate term's frequency. The frequency of a nested term is only subtracted from the base term if it falls within this interval. Terms whose normalized frequency drops to 0 are removed from the final list.
+        Normalizes candidate term frequencies by accounting for nested subterms. 
+        
+        Reduces the frequency of terms that appear inside longer candidate terms. A frequency compatibility interval (±percent%) is defined around each candidate term's frequency. The frequency of a nested term is only subtracted from the base term if it falls within this interval. Terms whose normalized frequency drops to 0 are removed from the final list.
 
         Args:
           candidate_terms: a list of tuple containing the candidate terms.
@@ -279,7 +274,9 @@ class Postprocessor:
     
     def apply_tsr_filter(self, tsr_terms, candidate_terms, mode="strict", max_iterations=10000000000, debug=False): 
         '''
-        Filters the extracted candidate terms using the TSR (Token Slot Recognition) method. The algorithm is based on the concept of terminological token to filter out term candidates. It reads the terminological tokens from a list of terms (tsr_terms) and stores them taking into account their position in the terminological unit (first, middle, last). The TSR method filters term candidates by taking into account their tokens. To do so, 3 filtering variants are designed: strict, flexible and combined. In strict TSR filtering, a term candidate will be kept only if all the tokens are present in the corresponding position. In flexible TSR filtering, a term candidate will be kept if any of the tokens is present in the corresponding position. In combined TSR filtering, strict filtering is first used and is then followed by flexible filtering. In flexible and combined mode the algorithm performs the filtering process recursively, that is, by enlarging the list of terminological tokens with the new selected term candidates.
+        Filters the extracted candidate terms using the TSR (Token Slot Recognition) method. 
+        
+        The algorithm is based on the concept of terminological token to filter out term candidates. It reads the terminological tokens from a list of terms (tsr_terms) and stores them taking into account their position in the terminological unit (first, middle, last). The TSR method filters term candidates by taking into account their tokens. To do so, 3 filtering variants are designed: strict, flexible and combined. In strict TSR filtering, a term candidate will be kept only if all the tokens are present in the corresponding position. In flexible TSR filtering, a term candidate will be kept if any of the tokens is present in the corresponding position. In combined TSR filtering, strict filtering is first used and is then followed by flexible filtering. In flexible and combined mode the algorithm performs the filtering process recursively, that is, by enlarging the list of terminological tokens with the new selected term candidates.
         
             Args:
                 tsr_terms: The reference standard terms.
