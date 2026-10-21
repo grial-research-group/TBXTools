@@ -1,8 +1,8 @@
 from .._processor.bert import BertProcessor
 from .._sqlite.sqlite import SQLite
-from .metrics import Metrics
-from .._resources.resources import Resources
-from .._utils.utils import get_lang
+from .._results.metrics import Metrics
+from .._processor.file_parser import FileParser
+from .._helpers.helpers import get_lang
 
 class BertTrainer:
     '''
@@ -15,32 +15,36 @@ class BertTrainer:
         labeling_scheme (str, optional): The labeling scheme to annotate the data or train the model with. Defaults to BIO.
     '''
 
-    def __init__(self, project_name, language, corpus=None, external_terms=None, overwrite_project=False, seed=123, labeling_scheme="BIO"):
+    def __init__(self, project_name, language, corpus=None, external_terms=None, stopwords=None, inner_stopwords=None, overwrite_project=False, seed=123, labeling_scheme="BIO"):
         from transformers import logging
         logging.set_verbosity_error()
         self.lang, self._lang_code = get_lang(language.lower())
 
         self.name = "BertTrainer"
-        self._resources = Resources(lang=self.lang, lang_code=self._lang_code)
-
-        self.stopwords = self._resources.get_spacy_stopwords()
-        self.inner_stopwords = self._resources.fetch_inner_stopwords()
-
         self._processor = BertProcessor()
         self._processor.choose_labels(labeling_scheme=labeling_scheme)
-        self._processor.lang_code = self._lang_code
+        self._processor.    lang_code = self._lang_code
         self._metrics = Metrics()
         self._seed = seed
+        
+        parser = FileParser(src_lang=self._lang_code)
+        _corpus = parser.parse(corpus=corpus)
 
         self._sqlite = SQLite(
             project_name=project_name, 
-            corpus=corpus, 
+            stopwords=stopwords,
+            inner_stopwords=inner_stopwords, 
+            corpus=_corpus,
+            external_terms=external_terms, 
             overwrite_project=overwrite_project, 
-            external_terms=external_terms)
+            lang_code=self._lang_code,
+            lang=self.lang, 
+        )
 
-        self.test_df = None
+        self.stopwords = self._sqlite.get("stopwords")
+        self.inner_stopwords = self._sqlite.get("inner_stopwords")
         
-    def train(self, model, save_as=None, split=False, expand_labels=False, sample=None, only_segments_with_terms=True, lr=5e-05, batch_size=16, epochs=3, weight_decay=0.01, gradient_accumulation_steps=1, warmup_ratio=0.0):
+    def train(self, model, save_as=None, split=False, expand_labels=False, sample=None, only_segments_with_terms=True, lr=5e-05, batch_size=16, epochs=3, weight_decay=0.01, gradient_accumulation_steps=1, warmup_ratio=0.1):
         '''
         Fine-tunes the chosen model for automatic terminology extraction.
 
@@ -70,13 +74,13 @@ class BertTrainer:
         
         df = self._fetch_data_from_db(
             sample=sample, 
-            only_segments_with_terms=only_segments_with_terms
-            )
+            only_segments_with_terms=only_segments_with_terms,
+        )
         
         df = self._processor.preprocess_train(
             df=df, 
-            expand_labels=expand_labels
-            )
+            expand_labels=expand_labels,
+        )
 
         if not split:
             train_data = Dataset.from_pandas(df)
@@ -103,14 +107,14 @@ class BertTrainer:
         
         elif split:
             from sklearn.model_selection import train_test_split
-            print("\nSplitting training data into train (0.7), validation (0.15) and test (0.15)")
-            train_val_df, test_df = train_test_split(df, test_size=0.15, random_state=self._seed)
-            self.test_df = test_df
-            train_df, val_df = train_test_split(train_val_df, test_size=0.15, random_state=self._seed)
+            print("\nSplitting training data into train (0.85) and val (0.15)")
+
+            train_df, val_df = train_test_split(df, test_size=0.15, random_state=self._seed)
+            # train_df, val_df = train_test_split(train_val_df, test_size=0.15, random_state=self._seed)
+            print(f"Train segments: {len(train_df)} - Val segments: {len(val_df)}")
 
             train_data = Dataset.from_pandas(train_df)
             val_data = Dataset.from_pandas(val_df)
-            test_data = Dataset.from_pandas(test_df)
 
             model_folder_name = self._processor.model_name.replace("/", "-")
             model_output_dir = f"./trainer_output/{model_folder_name}"
@@ -142,16 +146,16 @@ class BertTrainer:
                 eval_dataset=val_data,
                 compute_metrics=self._metrics.compute_metrics,
                 data_collator=data_collator,
-                callbacks=[EarlyStoppingCallback(early_stopping_patience=2)]
+                # callbacks=[EarlyStoppingCallback(early_stopping_patience=2)]
                 )
 
         print('Fine-tuning model', flush=True)
         print(f"Parameters: lr = {lr}, batch size = {batch_size}, weight decay = {weight_decay}, warmup ratio = {warmup_ratio}, epochs = {epochs}")
         trainer.train()
 
-        test_results = trainer.evaluate(test_data)
-        print("\nResults on the test data")
-        print(test_results)
+        # test_results = trainer.evaluate(test_data)
+        # print("\nResults on the test data")
+        # print(test_results)
 
         if save_as:
             trainer.save_model(f'{save_as}')
@@ -159,7 +163,9 @@ class BertTrainer:
 
     def annotate(self, sample=None):
         '''
-        Generate training data to fine-tune a model. It automatically annotates a corpus using an external list of terms. The resulting annotated data get saved in the database.
+        Generate training data to fine-tune a model. 
+        
+        Automatically annotate a corpus using an external list of terms. The resulting annotated data get saved in the database.
 
         Attributes:
             sample (int, optional): Number of sentences to randomly sample out of the corpus. Useful for testing purposes.
@@ -186,17 +192,20 @@ class BertTrainer:
 
         df = self._processor.annotate(segments=segments, external_terms=external_terms)
 
-        self._sqlite.delete("corpus")
-        self._sqlite.insert_segments(data=df["text"].tolist(), tagged=False, tokenized=False, in_list_of_lists=False)
+        # self._sqlite.delete("corpus")
+        # self._sqlite.insert_segments(data=df["text"].tolist(), tagged=False, tokenized=False) 
+
         self._sqlite.insert_word_tokens(data=df["word_tokens"].tolist())
         self._sqlite.insert_lemmatized_corpus(data=df["lemmas"].tolist())
         self._sqlite.insert_segment_labels(data=df["labels"]) # unaligned
 
-        tokens_FD = self._processor._calculate_tokens_FD(df["word_tokens"])
+        # df.to_csv("inspect-df.csv", index=False)
 
-        # self._sqlite.insert_segments(data=df["tokens"].tolist(), tagged=False, tokenized=True, in_list_of_lists=True) # inserting tokenized segments used in training. Maybe have another table for BERT tokens
+        # tokens_FD = self._processor._calculate_tokens_FD(df["word_tokens"])
 
-        self._sqlite.insert_tokens(data=tokens_FD)
+        # self._sqlite.insert_segments(data=df["tokens"].tolist(), tagged=False, tokenized=True, in_list_of_lists=True)
+
+        # self._sqlite.insert_tokens(data=tokens_FD)
 
         with_terms = df["labels"].apply(lambda seg_labels: any(label in ["B", "I"] for label in seg_labels))
         df_with_terms = df[with_terms]
@@ -205,6 +214,11 @@ class BertTrainer:
         print(f"\n{len(df)} total segments annotated and saved to database.")
         print(f"{len(df_with_terms)} segments with terms.")
         print(f"{len(df_without_terms)} segments without terms.")
+
+    def load_annotated(self, data):
+        # should take a json or csv (cuidado con strings dentro de listas) 
+        # segment? labels (check db)
+        pass
     
     def _fetch_data_from_db(self, sample=None, only_segments_with_terms=True):
         import pandas as pd
