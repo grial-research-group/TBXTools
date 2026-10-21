@@ -9,10 +9,11 @@ class BertProcessor():
         self.model_name = None
         self.stopwords = None
         self.inner_stopwords = None
-        self._lang_code = None
+        self.lang_code = None
         self.punctuation = string.punctuation
 
-        self.model = None
+        self.methodology = None
+        self.model = None # maybe a Model class with model.tokenizer model.data_collator etc.
         self.tokenizer = None
         self.data_collator = None
         self.trainer = None
@@ -48,6 +49,10 @@ class BertProcessor():
         print(f"Loading model {self.model_name}", flush=True)
         return AutoModelForTokenClassification.from_pretrained(self.model_name, num_labels=len(self._labeling_scheme_list), id2label=self._id2label, label2id=self._label2id)
     
+    def _set_filter_parameters(self):
+        self.stopwords = self.methodology.extractor.stopwords
+        self.inner_stopwords = self.methodology.extractor.inner_stopwords
+
     def choose_labels(self, labeling_scheme):
         if not labeling_scheme or labeling_scheme.upper() == "BIO":
             self.labeling_scheme = "BIO"
@@ -102,12 +107,12 @@ class BertProcessor():
 
         return df
 
-    def preprocess_test(self, segments):
-        spacy_model = get_spacy_model_from_code(self.lang_code)
+    def preprocess_test(self, segments, lang_code):
+        spacy_model = get_spacy_model_from_code(lang_code)
         nlp = load_spacy_model(spacy_model)
         word_tokens = []
 
-        # use a proper function
+        # can use just the tokenizer, not the whole model
         for segment in tqdm(segments, desc="Tokenizing segments", total=len(segments)):
 
             doc = nlp(segment)
