@@ -17,11 +17,11 @@ class Results:
         self._tagged_ngrams = tagged_ngrams or []
         self._linguistic_patterns = linguistic_patterns or []
         self._tokens = tokens or []
-        # add lang code for bilingualresults align
-
+        
         self.df = df
         self._methodology = None
         self._extractor = None
+        self._lang_code = None
 
     def print_candidates(self, limit=20, n=None, verbose=False):
         '''
@@ -148,7 +148,10 @@ class Results:
         candidate_terms = self._terms
 
         filtered_terms = self._methodology.postprocessor.lemmatization(
-            candidate_terms=candidate_terms, verbose=verbose)
+            candidate_terms=candidate_terms, 
+            lang_code=self._extractor._lang_code,
+            verbose=verbose, 
+        )
 
         self._extractor._sqlite.delete("candidate_terms")
         self._extractor._sqlite.insert_candidate_terms(filtered_terms)
