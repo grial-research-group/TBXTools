@@ -8,7 +8,7 @@ class SQLite:
     '''
 
     def __init__(self, project_name, corpus, stopwords=None, inner_stopwords=None, is_corpus_tagged=False, linguistic_patterns=None, evaluation_terms=None, external_terms=None, overwrite_project=False, lang=None, lang_code=None):
-        from TBXTools._resources.resources import Resources
+        from .._resources.resources import Resources
 
         self.cur = None
         self.MAX_INSERTS = 10000
@@ -123,6 +123,8 @@ class SQLite:
 
             if len(batch) == batch_size:
                 self.insert_segments(data=batch, tagged=is_corpus_tagged)
+
+                batch = []
 
         if batch:
             self.insert_segments(data=batch, tagged=is_corpus_tagged)
