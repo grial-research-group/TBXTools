@@ -12,23 +12,22 @@ class LinguisticMethodology():
         processor (Processor): An internal instance of the Processor class configured with 'nmin' and 'nmax' used to handle text preprocessing tasks.
     '''
 
-    def __init__(self, nmin, nmax, min_freq=2, is_corpus_tagged=False, case_normalization=True, linguistic_patterns=None, evaluation_terms=None, patterns=None):
+    def __init__(self, nmin, nmax, min_freq=2, is_corpus_tagged=False, case_normalization=True, linguistic_patterns=None, evaluation_terms=None):
         from ..._processor.postprocessor import Postprocessor
         from ..._processor.preprocessor import Preprocessor
 
         self.name = "LinguisticMethodology"
         self.case_normalization = case_normalization
-        # self.is_corpus_tagged = is_corpus_tagged
+        self.is_corpus_tagged = is_corpus_tagged
         self.linguistic_patterns = linguistic_patterns
         self.evaluation_terms = evaluation_terms
         self.nmin = nmin
         self.nmax = nmax
         self.min_freq = min_freq
-        self.patterns = patterns
 
         self.extractor = None
         self.preprocessor = Preprocessor(methodology=self)
-        self.postprocessor = Postprocessor()
+        self.postprocessor = Postprocessor(methodology=self)
 
     def run(self, segments, verbose=False):
         '''
@@ -42,13 +41,13 @@ class LinguisticMethodology():
             results: A Results object containing the candidate terms.
         '''
         from ..._results.results import Results
- 
-        evaluation_terms = self.extractor._sqlite.get("evaluation_terms")
-
-        if not list(self.extractor._sqlite.get_segments(tagged=True)):
+        
+        if self.is_corpus_tagged:
+            tagged_segments = list(self.extractor._sqlite.get_segments(tagged=True))
+        else:
             tagged_segments = self.preprocessor.create_tagged_segments(
                 segments=segments,
-                lang_code=self.extractor._lang_code
+                lang_code=self.extractor._lang_code,
             )
 
         self.preprocessor._set_filter_parameters()
@@ -56,7 +55,13 @@ class LinguisticMethodology():
 
         clean_ngrams = self.preprocessor._extract_clean_ngrams_from_tagged()
 
-        if not self.extractor._sqlite.get("linguistic_patterns"):
+        evaluation_terms = self.extractor._sqlite.get("evaluation_terms")
+        linguistic_patterns = self.extractor._sqlite.get("linguistic_patterns")
+
+        if linguistic_patterns and not evaluation_terms:
+            translated_linguistic_patterns = self.preprocessor.translate_pattern(linguistic_patterns)
+
+        elif not linguistic_patterns and evaluation_terms:
             translated_linguistic_patterns = self.preprocessor._generate_linguistic_patterns(
                 evaluation_terms=evaluation_terms,
                 clean_ngrams=clean_ngrams,
