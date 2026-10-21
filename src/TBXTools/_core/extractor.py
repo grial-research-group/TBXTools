@@ -25,8 +25,9 @@ class Extractor:
 
         self.lang, self._lang_code = get_lang(language.lower())
         self._methodology = methodology
-        self.parser = FileParser(src_lang=self._lang_code)
-        _corpus = self.parser.parse(corpus=corpus)
+        
+        parser = FileParser(src_lang=self._lang_code)
+        _corpus = parser.parse(corpus=corpus)
         
         self._sqlite = SQLite(
             project_name=project_name,
