@@ -12,13 +12,14 @@ class BertMethodology(BaseMethodology):
         labeling_scheme (str): The labels used in the fine-tuning of the model. Defaults to "BIO".
     '''
 
-    def __init__(self, model, labeling_scheme="BIO"):
+    def __init__(self, model, labeling_scheme="BIO", is_corpus_annotated=False):
         from transformers import logging
         logging.set_verbosity_error()
 
         self.name = "BertMethodology"
         self.model_name = model
-
+        self.is_corpus_annotated = is_corpus_annotated
+        
         self.processor = BertProcessor(methodology=self)
         self.extractor = None
         self.processor.choose_labels(labeling_scheme=labeling_scheme)
