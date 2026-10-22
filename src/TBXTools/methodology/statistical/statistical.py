@@ -3,8 +3,9 @@ class StatisticalMethodology():
     Manages statistical terminology extraction.
 
     Attributes:
-        name (str): The name of the methodology 
-        _processor (Processor): An internal instance of the Processor class configured with 'nmin' and 'nmax' used to handle text preprocessing tasks.
+        name (str): The name of the methodology
+        nmin (int): Minimum number of words in a term.
+        nmax (int): Maximum number of words in a term.
         case_normalization: If True applies case_normalization to the candidate terms. Default to True.
         min_freq (int): The minimum frequency threshold. Only n-grams appearing at least "min_freq" times will be included in the output.
     '''
