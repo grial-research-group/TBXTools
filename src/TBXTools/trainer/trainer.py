@@ -23,7 +23,7 @@ class BertTrainer:
         self.name = "BertTrainer"
         self._processor = BertProcessor()
         self._processor.choose_labels(labeling_scheme=labeling_scheme)
-        self._processor.    lang_code = self._lang_code
+        self._processor.lang_code = self._lang_code
         self._metrics = Metrics()
         self._seed = seed
         
@@ -53,7 +53,7 @@ class BertTrainer:
             sample (int, optional): Number of sentences to randomly sample out of the annotated data.
             save_as (str, optional): Path of the model to save to disk.
             split (bool, optional): If True, it splits the data in train (0.8) and test (0.2).
-            expand_labels (bool, optional): If True, assigns B labels to all the subwords of the first word and I to the remaining words/subwords, instead of assigning B only to the first subword token of the term.
+            expand_labels (bool, optional): If True, assigns B labels to all the subwords of the first word and I to the remaining words/subwords, instead of assigning B only to the first subword token of the term. Defaults to False.
             lr (int, optional): Learning rate of the model. Defaults to 5e-05.
             batch_size (int, optional): Defaults to 16.
             epochs (int, optional): Defaults to 3.
