@@ -29,4 +29,4 @@ class LinguisticTagger:
             if not token.is_space:
                 data.append(f"{token.text}|{token.lemma_}|{token.pos_}")
         
-        return " \t ".join(data) if data else ""
+        return " ".join(data) if data else ""

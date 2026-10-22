@@ -8,7 +8,7 @@ class SQLite:
     '''
 
     def __init__(self, project_name, corpus, stopwords=None, inner_stopwords=None, is_corpus_tagged=False, linguistic_patterns=None, evaluation_terms=None, external_terms=None, overwrite_project=False, lang=None, lang_code=None):
-        from TBXTools._resources.resources import Resources
+        from .._resources.resources import Resources
 
         self.cur = None
         self.MAX_INSERTS = 10000
@@ -18,7 +18,6 @@ class SQLite:
 
         self.TABLES_TO_LOAD_AT_START = ["corpus", "tagged_corpus", "stopwords", "inner_stopwords", "linguistic_patterns", "evaluation_terms", "external_terms"]
         
-        self.TABLES_LOADED = []
         self.descriptive_statistics_data = {}
         
         self.lang = lang
@@ -49,7 +48,7 @@ class SQLite:
     def initialize_project(self, project_name, overwrite_project):
         '''Initialize the SQLite project, either opening an existing one or creating a new one.'''
         file_name = self.add_extension(project_name=project_name)
-        self.project_name = file_name
+        self.project_name = file_name.stem
 
         if file_name.exists() and overwrite_project==False:
             self.open_project(project_name=project_name)
@@ -76,7 +75,7 @@ class SQLite:
         '''Opens a project. If the project already exists, it raises an exception. To avoid the exception use overwrite=True. To open existing projects, use the open_project method.'''
 
         project_name = self.add_extension(project_name)
-        print(f"Creating project: {project_name}" if not overwrite else f"Overwriting project: {project_name}")
+        print(f"\nCreating project: {project_name}" if not overwrite else f"\nOverwriting project: {project_name}")
         
         if os.path.isfile(project_name) and overwrite:
             os.remove(project_name)
@@ -111,56 +110,49 @@ class SQLite:
 
         self.conn = sqlite3.connect(project_name)
         self.cur = self.conn.cursor() 
-    
-                
-    def read_corpus(self, corpus_file, is_corpus_tagged, encoding):
-        '''Read a corpus file.'''
-        data = []
-        continserts = 0
-        if corpus_file:
-            with open(corpus_file, "r", encoding=encoding, errors="ignore") as file:
-                for line in file:
-                    data.append(line.rstrip())
-                    continserts += 1
 
-                    if continserts == self.MAX_INSERTS:
-                        self.insert_segments(data=data, tagged=is_corpus_tagged)
-                        data = []
-                        continserts = 0
-                
-                self.insert_segments(data=data, tagged=is_corpus_tagged)
+    def read_corpus(self, corpus_generator, is_corpus_tagged=False, batch_size=1000):
+        '''Reads a corpus in batches'''
+        from .._processor.normalizer import Normalizer
+
+        batch = []
+
+        for segment in corpus_generator:
+            clean_segment = Normalizer.normalize(segment)
+            batch.append((clean_segment,))
+
+            if len(batch) == batch_size:
+                self.insert_segments(data=batch, tagged=is_corpus_tagged)
+
+                batch = []
+
+        if batch:
+            self.insert_segments(data=batch, tagged=is_corpus_tagged)
 
     # LOAD METHODS
-    def load_corpus(self, corpus, is_corpus_tagged=False, encoding="utf-8", compoundify=False, comp_symbol="▁"):
-        from pathlib import Path
+    def load_corpus(self, corpus, is_corpus_tagged=False):
+        from typing import Generator
         
-        if type(corpus) == str and Path(corpus).is_file():
-            self.read_corpus(
-            corpus_file=corpus, 
-            is_corpus_tagged=is_corpus_tagged, 
-            encoding=encoding)
-            print(f"Corpus loaded")
+        if corpus:
+            if isinstance(corpus, Generator):
+                self.read_corpus(corpus_generator=corpus, is_corpus_tagged=is_corpus_tagged)
 
-        if isinstance(corpus, (list, tuple)):
-            is_file = False
-            try:
-                if corpus and Path(corpus[0]).is_file():
-                    is_file = True
-            except (OSError, TypeError):
-                is_file  = False
+                print("Corpus loaded", flush=True)
+            
+            elif isinstance(corpus, list):
+                if isinstance(corpus[0], Generator):
+                    for corpus_gen in corpus:
+                        self.read_corpus(corpus_generator=corpus_gen, is_corpus_tagged=is_corpus_tagged)
 
-            if is_file:
-                for c in corpus:
-                    if Path(c).is_file():
-                        self.read_corpus(
-                            corpus_file=c, 
-                            is_corpus_tagged=is_corpus_tagged, 
-                            encoding=encoding)
-                print(f"{len(corpus)} corpora loaded")
+                    print(f"{len(corpus)} corpora loaded", flush=True)
 
-            else: # if not file, its separate segments
-                self.insert_segments(data=corpus, tagged=is_corpus_tagged)
-                print(f"Segments loaded")
+                else:
+                    self.read_corpus(corpus_generator=corpus)
+
+                    print("Segments loaded", flush=True)
+           
+            else:
+                raise ValueError("Corpus is not a Generator object")
             
     def load_stopwords(self, stopwords , encoding="utf-8"):
         '''Load the stopwords into the database.
@@ -170,7 +162,7 @@ class SQLite:
         '''
         data=[]
 
-        if isinstance(stopwords, set):
+        if isinstance(stopwords, set) or isinstance(stopwords, list):
             data = [(word,) for word in sorted(stopwords)]
             print("Stopwords loaded")
 
@@ -205,7 +197,6 @@ class SQLite:
             self.cur.executemany("INSERT INTO inner_stopwords (inner_stopword) VALUES (?)",data) 
 
     def load_linguistic_patterns(self, linguistic_patterns, encoding="utf-8"):
-
         data= []
 
         if linguistic_patterns:
@@ -313,21 +304,15 @@ class SQLite:
                 self.cur.executemany('INSERT INTO external_terms (external_term) VALUES (?)', data)
 
     # INSERT METHODS
-    def insert_segments(self, data, tagged=False, tokenized=False, in_list_of_lists=False):
-        '''Inserts the segmented corpus into the database.'''
-        if in_list_of_lists:
-            data = [" ".join(segment) for segment in data]
-        
-        data = [(segment,) for segment in data]
+    def insert_segments(self, data, tagged=False, tokenized=False):
         with self.conn:
             if tagged:
                 self.cur.executemany("INSERT INTO tagged_corpus (tagged_segment) VALUES (?)", data)
             elif tokenized:
-
                 self.cur.executemany("INSERT INTO tokenized_corpus (tokenized_segment) VALUES (?)", data)
             else:
                 self.cur.executemany("INSERT INTO corpus (segment) VALUES (?)", data)
-    
+
     def insert_ngrams(self, data, tagged=False):
         '''Inserts Ngrams and Tagged Ngrams into the database.'''
         
@@ -338,12 +323,24 @@ class SQLite:
             query = f"INSERT INTO {table} ({column}, n, frequency) VALUES (?,?,?)"
             with self.conn:
                 self.cur.executemany(query, data)
+
+    # def insert_ngrams(self, data):
+    #     '''Inserts ngrams into the database'''
+    #     if not self.table_is_populated("ngrams"):
+    #         data = data.items()
+
+    #         for ngram, freq in data:
+    #             with self.conn:
+    #                 self.cur.execute("INSERT INTO ngrams (ngram, frequency) VALUES (?,?)", (ngram, freq))
     
     def insert_tokens(self, data):
         '''Inserts tokens into the database'''
         if not self.table_is_populated("tokens"):
-            with self.conn:
-                self.cur.executemany("INSERT INTO tokens (token, frequency) VALUES (?,?)", data)
+            data = data.items()
+
+            for token, freq in data:
+                with self.conn:
+                    self.cur.execute("INSERT INTO tokens (token, frequency) VALUES (?,?)", (token, freq))
 
     def insert_candidate_terms(self, data):
         '''Inserts candidate terms into the database'''
@@ -577,8 +574,6 @@ class SQLite:
             # if the table does not have data, it is loaded in
             if loader and not self.table_is_populated(table_name=table):
                 loader()
-                self.TABLES_LOADED.append(table)
-
 
     def calculate_descriptive_statistics(self):
         tables = ["corpus", "candidate_terms"]

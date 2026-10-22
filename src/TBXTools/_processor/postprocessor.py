@@ -1,10 +1,11 @@
-from .._utils.utils import get_spacy_model_from_code
+from .._helpers.helpers import get_spacy_model_from_code
 from tqdm import tqdm
-import re
 
-class Processor:
+class Postprocessor:
     '''
-    Manages the text preprocessing pipeline for terminology extraction. This class provides methods for tokenizing text segments, applying lemmatization, case and nest normalizations, and filtering candidate terms using stopwords and regular expressions.
+    Manages the text preprocessing pipeline for terminology extraction. 
+    
+    This class provides methods for tokenizing text segments, applying lemmatization, case and nest normalizations, and filtering candidate terms using stopwords and regular expressions.
 
     Attributes:
         stopwords (list/set): A collection of standard words to filter out.
@@ -16,16 +17,10 @@ class Processor:
         nlp: The NLP pipeline or model used for text processing.
     '''
 
-    def __init__(self):
-        self.stopwords = None
-        self.inner_stopwords = None
+    def __init__(self, methodology):
         self.nmin = None
         self.nmax = None
-        self.lang_code = None
-        self.model_name = None
-        self.nlp = None
 
-    
     def case_normalization(self, candidate_terms, verbose=False):
         '''
         Performs case normalization on candidate terms while preserving acronyms. Converts candidate terms to lowercase except for uppercase tokens (e.g acronyms like 'ADH1B' or 'ADHD'). If a capitalized term exists as non-capitalized, the capitalized one will be deleted and the frequency of the non-capitalized one will be increased by the frequency of the capitalized.
@@ -73,7 +68,7 @@ class Processor:
 
         return normalized_terms
     
-    def lemmatization(self, candidate_terms, verbose=False):
+    def lemmatization(self, candidate_terms, lang_code, verbose=False):
         '''
         Performs lemmatization. Applies lemmatization to all candidate terms and merges duplicates by summing their frequencies.
 
@@ -85,21 +80,11 @@ class Processor:
           normalized_terms: A new list of tuple after applying lemmatization.
         '''
         
-        from spacy.tokens import Doc 
-
-        from .._utils.utils import load_spacy_model
+        from spacy.tokens import Doc
+        from .._helpers.helpers import load_spacy_model
         
-        if self.lang_code and not self.model_name:
-            self.model_name = get_spacy_model_from_code(self.lang_code)
-
-
-        #if self.nlp is None: 
-            #if self.model_name is None:
-                #raise ValueError( #maybe we can eliminate this error- we will always set a lang code in the extraction
-                    #"Unable to start lemmatization: the language (lang_code) has not been set"
-                #)
-            
-            self.nlp = load_spacy_model(self.model_name)
+        model_name = get_spacy_model_from_code(lang_code)
+        nlp = load_spacy_model(model_name)
             
         freq_dict = {}
 
@@ -107,11 +92,11 @@ class Processor:
             term = terms_row[0].strip()
             freq = terms_row[3]
 
-            words = term.split() #is this necesary? Doc probably splits already, if we split then I THINK words like l'estat dont get tokenized and lemmatized like spaCy does
+            words = term.split()
 
-            doc = Doc(self.nlp.vocab, words=words)
+            doc = Doc(nlp.vocab, words=words)
 
-            for name, proc in self.nlp.pipeline:
+            for name, proc in nlp.pipeline:
                 doc = proc(doc)
 
             lemmatized_term = " ".join([token.lemma_.strip() for token in doc])
@@ -120,9 +105,10 @@ class Processor:
 
         normalized_terms = []
         for lemma, freq in freq_dict.items():
-            n = len(lemma.split())
 
+            n = len(lemma.split())
             row = (lemma, n, "frequency", freq)
+
             normalized_terms.append(row)
 
             if verbose:
@@ -132,10 +118,11 @@ class Processor:
 
         return normalized_terms
         
-    
     def nest_normalization(self, candidate_terms, percent=10, verbose=False):
         """
-        Normalizes candidate term frequencies by accounting for nested subterms. Reduces the frequency of terms that appear inside longer candidate terms. A frequency compatibility interval (±percent%) is defined around each candidate term's frequency. The frequency of a nested term is only subtracted from the base term if it falls within this interval. Terms whose normalized frequency drops to 0 are removed from the final list.
+        Normalizes candidate term frequencies by accounting for nested subterms. 
+        
+        Reduces the frequency of terms that appear inside longer candidate terms. A frequency compatibility interval (±percent%) is defined around each candidate term's frequency. The frequency of a nested term is only subtracted from the base term if it falls within this interval. Terms whose normalized frequency drops to 0 are removed from the final list.
 
         Args:
           candidate_terms: a list of tuple containing the candidate terms.
@@ -144,11 +131,7 @@ class Processor:
         
         Returns:
           updated_terms: A new list of tuple after applying nest normalization.
-
-
         """
-        # print("Applying nested frequency normalization")
-
         updated_terms = []
         terms_by_n = {}
 
@@ -212,13 +195,14 @@ class Processor:
 
         return updated_terms
     
-    def regex_exclusion(self, regexes, candidate_terms, verbose=False, mode="strict"):
+    def regex_exclusion(self, regexes, candidate_terms, mode, verbose=False):
         '''
         Remove candidate terms that match regex expressions. It takes data in tuples as rows and outputs a list of candidate terms to exclude.
 
         Args:
           regexes: regular expression patterns used to match and filter out unwanted terms.
           candidate_terms: a list of tuple containing the candidate terms.
+          mode: 'strict' removes full string matches, 'flexible' removes candidates that contain the regex. Defaults to 'strict'. 
           verbose: If True, enables detailed logging. Defaults to False.
         
         Returns:
@@ -254,152 +238,6 @@ class Processor:
                     break
 
         return candidates_to_exclude
-             
-    def tokenize(self, segment):
-        """
-        Tokenizes a text segment into word tokens using a custom regular expression.
-
-        This tokenizer strips away general boundary punctuation, but keeps optional surrounding parentheses attached to the tokens. It also preserves internal word characters such as apostrophes, hyphens, periods, commas, and the Catalan middle dot (·).
-
-        Args: 
-          segment (str): A text segment to be tokenized.
-
-        Returns: 
-          list[str]: A list of tokens extracted from the segment.
-        """
-        from nltk.tokenize import RegexpTokenizer
-        #tokenizer = RegexpTokenizer(r"\b\w(?:[\w'‘’.,-]*\w)?\b")
-        tokenizer = RegexpTokenizer(r"\(?\b\w(?:[\w'‘’.,-·]*\w)?\b\)?")
-        tokenized_segment = tokenizer.tokenize(segment.replace("\xa0", " "))
-        return tokenized_segment
-    
-    def filter_by_stopwords(self, term):
-        """
-        Filters a candidate term by checking for invalid stopwords. A term is rejected(returns None) if it contains a standard stopword at its boundaries (start/end) or an inner stopword in its middle tokens.
-
-        Args: 
-          term(str): The candidate term string to validate.
-        
-        Returns:
-          str or None: The original term string if it passes all stopword filters, otherwise None.
-        """
-        split_term = term.lower().split()
-
-    #stopwords at boundaries
-    
-        if (split_term[0] in self.stopwords or split_term[-1] in self.stopwords):
-            return None
-
-    # inner stopwords
-        for token in split_term[1:-1]:
-            if token in self.inner_stopwords:
-                return None
-
-        return term
-
-    def filter_by_stopwords_linguistic(self, term):
-        """
-        Filters a candidate term (in this case a tagged ngram) by checking for invalid stopwords. A term is rejected (returns None) if it contains a standard stopword at its boundaries (start/end).
-
-        Args: 
-          term(str): The candidate term string to validate.
-        
-        Returns:
-          str or None: The original term string if it passes all stopword filters, otherwise None.
-        """
-
-        if not term or not term.strip():
-            return None
-
-        split_term = term.lower().split()
-    
-        if not split_term:
-            return None
-
-        first_parts = split_term[0].split("|")
-        first_word = first_parts[1] if len(first_parts) > 1 else (first_parts[0] if len(first_parts) > 0 else "")
-    
-        if first_word and first_word in self.stopwords:
-            return None
-    
-        last_parts = split_term[-1].split("|")
-        last_word = last_parts[1] if len(last_parts) > 1 else (last_parts[0] if len(last_parts) > 0 else "")
-    
-        if last_word and last_word in self.stopwords:
-            return None
-    
-        return term
-    
-    # linguistic processing
-    def translate_pattern(self, linguistic_patterns):
-        """
-        Translates a list of linguistic patterns into valid regular expressions.
-
-        This method processes each pattern string (or the first element of a tuple), tokenizes it by whitespace, and converts specific custom syntax elements into regex equivalents.
-
-        Args:
-           linguistic_patterns (list of str or list of tuple): A list containing the linguistic patterns to be translated. If an element is a tuple, only the first string item is processed.
-
-        Returns:
-           list of str: A list of compiled regular expression strings."""
-
-        translated_patterns= []
-        
-        for pattern_str in linguistic_patterns:
-            if isinstance(pattern_str, tuple):
-                pattern_str = pattern_str[0]
-
-            aux = []
-            for ptoken in pattern_str.split():
-                auxtoken = []
-                ptoken = ptoken.replace(".*", "[^\s]+") 
-                for pelement in ptoken.split("|"):
-                    if pelement == "#":
-                        auxtoken.append("([^\s]+?)")                    
-                    elif pelement == "":
-                        auxtoken.append("[^\s]+?")
-                    else:
-                        if pelement.startswith("#"):
-                            auxtoken.append("(" + pelement.replace("#", "") + ")")
-                        else:
-                            auxtoken.append(pelement)
-                aux.append("\|".join(auxtoken))
-            tp = "(" + " ".join(aux) + ")"
-            
-            translated_patterns.append(tp)
-            
-        return translated_patterns
-    
-    def create_tagged_segments(self, segments):
-        """
-        Pos tags a list of text segments.
-
-        Args:
-          segment (list of str): The input text string to be processed.
-
-        Returns:
-          tagged_segments (list of str): A list of POS tagged segments.
-        """
-        from .._utils.utils import load_spacy_model
-
-        if self.lang_code and not self.model_name:
-            self.model_name = get_spacy_model_from_code(self.lang_code)
-        
-            self.nlp = load_spacy_model(self.model_name)
-
-        from ..methodology.linguistic.tagger import LinguisticTagger
-
-        tagger = LinguisticTagger(self.nlp)
-
-        tagged_segments = []
-        for segment in segments:
-
-            single_tagged_segment = tagger.tag_segment(segment)
-
-            if single_tagged_segment:
-                tagged_segments.append(single_tagged_segment)
-
-        return tagged_segments
     
     def ngram_calculation(self, segments, is_corpus_tagged=False, minfreq=2):
         '''
@@ -414,32 +252,19 @@ class Processor:
           ngrams_output (list of tuple) : A list of tuples containing the ngram strings with their lenght and frequency.
           tagged_ngrams_output (list of tuple) : A list of tuples containing the original tagged n-grams with their length and frequency. This list remains empty if `is_corpus_tagged` is False.       
         '''
-        import nltk
-        from nltk.util import ngrams as compute_ngrams
-        
-        ngramsFD = nltk.probability.FreqDist()
-        nmin = self.nmin
-        nmax = self.nmax
-        for segment in segments:
-            if is_corpus_tagged:
-                tokens = segment.split()
-            else:
-                tokens = self.tokenize(segment)
-
-            for n in range(nmin, nmax + 1):  
-                ngrams_list = compute_ngrams(tokens, n) 
-                for ngram in ngrams_list:
-                    ngramsFD[ngram] += 1
 
         ngrams_output = []
         tagged_ngrams_output = []
-        for ngram, freq in ngramsFD.most_common(): 
+
+        for ngram, freq in self.ngrams_freq_dist.most_common(): 
             if freq >= minfreq:
                 if is_corpus_tagged:
+
                     candidate_words = [ngt.split("|")[0] for ngt in ngram]
                     clean_ngram = " ".join(candidate_words)
 
                     ngrams_output.append((clean_ngram, len(ngram), freq))
+
                     tagged_ngrams_output.append((" ".join(ngram), len(ngram), freq))
 
                 else:
@@ -447,10 +272,11 @@ class Processor:
 
         return ngrams_output, tagged_ngrams_output
     
-    
     def apply_tsr_filter(self, tsr_terms, candidate_terms, mode="strict", max_iterations=10000000000, debug=False): 
         '''
-        Filters the extracted candidate terms using the TSR (Token Slot Recognition) method. The algorithm is based on the concept of terminological token to filter out term candidates. It reads the terminological tokens from a list of terms (tsr_terms) and stores them taking into account their position in the terminological unit (first, middle, last). The TSR method filters term candidates by taking into account their tokens. To do so, 3 filtering variants are designed: strict, flexible and combined. In strict TSR filtering, a term candidate will be kept only if all the tokens are present in the corresponding position. In flexible TSR filtering, a term candidate will be kept if any of the tokens is present in the corresponding position. In combined TSR filtering, strict filtering is first used and is then followed by flexible filtering. In flexible and combined mode the algorithm performs the filtering process recursively, that is, by enlarging the list of terminological tokens with the new selected term candidates.
+        Filters the extracted candidate terms using the TSR (Token Slot Recognition) method. 
+        
+        The algorithm is based on the concept of terminological token to filter out term candidates. It reads the terminological tokens from a list of terms (tsr_terms) and stores them taking into account their position in the terminological unit (first, middle, last). The TSR method filters term candidates by taking into account their tokens. To do so, 3 filtering variants are designed: strict, flexible and combined. In strict TSR filtering, a term candidate will be kept only if all the tokens are present in the corresponding position. In flexible TSR filtering, a term candidate will be kept if any of the tokens is present in the corresponding position. In combined TSR filtering, strict filtering is first used and is then followed by flexible filtering. In flexible and combined mode the algorithm performs the filtering process recursively, that is, by enlarging the list of terminological tokens with the new selected term candidates.
         
             Args:
                 tsr_terms: The reference standard terms.

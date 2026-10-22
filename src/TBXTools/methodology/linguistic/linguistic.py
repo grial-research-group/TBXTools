@@ -1,164 +1,132 @@
 import re
-from ..base.base import BaseMethodology
-from ..._results.results import Results
-from ..._processor.processor import Processor
-from .patterns_learning import PatternsLearning
-from collections import Counter
 
-class LinguisticMethodology(BaseMethodology): 
-
+class LinguisticMethodology():
     '''
     Manages linguistic terminology extraction.
-    
+
     Attributes:
         name (str): The name of the methodology ("LinguisticMethodology).
         is_corpus_tagged (bool): If True, indicates that the input corpus is POS-tagged.
         linguistic_patterns (list of str | None): A list of linguistic patterns.
         evaluation_terms (list of str | None) : Reference terms from which we can extrapolate linguistic patterns if 'linguistic_patterns' is not provided.
-        tsr_terms (list of str | None): Reference terms for TSR filter.
         processor (Processor): An internal instance of the Processor class configured with 'nmin' and 'nmax' used to handle text preprocessing tasks.
     '''
 
-    def __init__(self, nmin, nmax, is_corpus_tagged=False, case_normalization=True, linguistic_patterns=None, evaluation_terms=None, tsr_terms=None):
-        
+    def __init__(self, nmin, nmax, min_freq=2, is_corpus_tagged=False, case_normalization=True, linguistic_patterns=None, evaluation_terms=None):
+        from ..._processor.postprocessor import Postprocessor
+        from ..._processor.preprocessor import Preprocessor
+
         self.name = "LinguisticMethodology"
+        self.case_normalization = case_normalization
         self.is_corpus_tagged = is_corpus_tagged
         self.linguistic_patterns = linguistic_patterns
         self.evaluation_terms = evaluation_terms
-        self.case_normalization = case_normalization
-        self.tsr_terms = tsr_terms        
-        self.processor = Processor()
-        self.processor.nmin = nmin 
-        self.processor.nmax = nmax
+        self.nmin = nmin
+        self.nmax = nmax
+        self.min_freq = min_freq
+
         self.extractor = None
+        self.preprocessor = Preprocessor(methodology=self)
+        self.postprocessor = Postprocessor(methodology=self)
 
-    # MAIN FUNCTION
-
-    def run(self, segments, minfreq=2, verbose=False):
+    def run(self, segments, verbose=False):
         '''
-        Extracts candidate terms from text segments using a linguistic methodology.
-
-        This method coordinates the entire extraction process: it ensures that POS-tagged segments are available (generating them if missing), calculates n-grams, automatically learns POS patterns from evaluation terms if no patterns are provided, filters candidates using those patterns, and extracts the final terminology. The actual extraction logic is delegated to the '_linguistic_extraction' method.
+        Extracts candidate terms from text segments using a linguistic methodology. This method coordinates the entire extraction process: it ensures that POS-tagged segments are available (generating them if missing), calculates n-grams, automatically learns POS patterns from evaluation terms if no patterns are provided, filters candidates using those patterns, and extracts the final terminology.
 
         Args:
             segments (list of str): A list of raw text segments to process.
-            tagged_segments (list of str): A list of POS tagged segments to process.
-            min_freq: minfreq (int, optional): The minimum frequency required for an n-gram to be considered a candidate term. Defaults to 2.
             verbose (bool, optional): If True, enables detailed logging. Defaults to False.
         
         Returns:
-            tuple[Results, list[str]]: A tuple containing:
-                - Results: An object holding the calculated clean n-grams, 
-                  tagged n-grams, extracted candidate terms, and the linguistic 
-                  patterns used.
-                - list[str]: The POS-tagged segments to store them in the database if newly generated.
+            results: A Results object containing the candidate terms.
         '''
+        from ..._results.results import Results
+        
+        if self.is_corpus_tagged:
+            tagged_segments = list(self.extractor._sqlite.get_segments(tagged=True))
+        else:
+            tagged_segments = self.preprocessor.create_tagged_segments(
+                segments=segments,
+                lang_code=self.extractor._lang_code,
+            )
+
+        self.preprocessor._set_filter_parameters()
+        self._extract_tagged_ngrams(tagged_segments=tagged_segments)
+
+        clean_ngrams = self.preprocessor._extract_clean_ngrams_from_tagged()
 
         evaluation_terms = self.extractor._sqlite.get("evaluation_terms")
         linguistic_patterns = self.extractor._sqlite.get("linguistic_patterns")
-        tagged_segments = list(self.extractor._sqlite.get_segments(tagged=True))
 
-        if not tagged_segments:
-            tagged_segments = self.processor.create_tagged_segments(segments=segments)
+        if linguistic_patterns and not evaluation_terms:
+            translated_linguistic_patterns = self.preprocessor.translate_pattern(linguistic_patterns)
 
-        clean_ngrams, tagged_ngrams = self.processor.ngram_calculation(segments=tagged_segments, is_corpus_tagged=True) # never change boolean, since we are passing tagged_segments then corpus is tagged now
-        
-        filtered_tagged_ngrams = []
-        combined_ngrams = list(zip(clean_ngrams, tagged_ngrams))
-        for term in evaluation_terms:
-            for row in combined_ngrams:
-                clean_ngram = row[0][0]
-                tagged_ngram = row[1][0]
-                n = row[1][1]
-                freq = row[1][2]
-                if term == clean_ngram:
-                    row = (tagged_ngram, n, freq)
-                    filtered_tagged_ngrams.append(row)
+        elif not linguistic_patterns and evaluation_terms:
+            translated_linguistic_patterns = self.preprocessor._generate_linguistic_patterns(
+                evaluation_terms=evaluation_terms,
+                clean_ngrams=clean_ngrams,
+                output_file=f"{self.extractor._sqlite.project_name}-ling-patterns.txt"
+            )
 
-        if not linguistic_patterns: # learn patterns
-            print("Linguistic patterns not found. Starting automatic pattern learning")
-            pattern_learner = PatternsLearning()
-
-            learn_dict = pattern_learner.learn_linguistic_patterns(outputfile="learned_linguistic_patterns.txt", filtered_tagged_ngrams=filtered_tagged_ngrams, verbose=verbose)
- 
-            if learn_dict:
-                #added to order the patterns by frequency
-                sorted_patterns = sorted(learn_dict.keys(), key=lambda x: learn_dict[x], reverse=True)
-                linguistic_patterns = list(sorted_patterns)
-                linguistic_patterns = [(linguistic_pattern,) for linguistic_pattern in linguistic_patterns] # strings must be in tuples
-
-            else:
-                raise ValueError("Learning process produced no patterns. Please verify database data.")
-     
-        translated_linguistic_patterns = self.processor.translate_pattern(linguistic_patterns)
-        candidate_terms = self._linguistic_extraction(ngrams_output=tagged_ngrams, linguistic_patterns=translated_linguistic_patterns, minfreq=minfreq)
+        candidate_terms = self._extract_candidates(
+            translated_patterns=translated_linguistic_patterns)
 
         if self.case_normalization:
-                     candidate_terms = self.processor.case_normalization(
-                        candidate_terms=candidate_terms, 
-                        verbose=verbose) 
+                    candidate_terms = self.postprocessor.case_normalization(candidate_terms=candidate_terms, verbose=verbose)
 
-        results = Results(tagged_ngrams=tagged_ngrams,
-                       ngrams=clean_ngrams, 
-                       terms=candidate_terms, 
-                       linguistic_patterns=linguistic_patterns)
+        results = Results(terms=candidate_terms)
 
-        self.extractor._sqlite.insert_segments(tagged_segments, tagged=True)
-        self.extractor._sqlite.insert_ngrams(results._tagged_ngrams, tagged=True)
-        self.extractor._sqlite.insert_ngrams(results._ngrams)
-        self.extractor._sqlite.insert_linguistic_patterns(results._linguistic_patterns)
+        # self.extractor._sqlite.insert_segments(tagged_segments, tagged=True)
+        # self.extractor._sqlite.insert_ngrams(results._tagged_ngrams, tagged=True)
+        # self.extractor._sqlite.insert_ngrams(results._ngrams)
+        # self.extractor._sqlite.insert_linguistic_patterns(results._linguistic_patterns)
 
         return results
-    
-    
-    def _linguistic_extraction(self, linguistic_patterns, ngrams_output, minfreq=2):
+
+    def _extract_tagged_ngrams(self, tagged_segments):
         '''
-        Extracts candidate terms using the linguistic methodology.
+        Extracts n-grams from tagged segments. It processes the text segments to generate tokens and n-grams, applies stopword filtering (both boundary and inner), and calculates their frequency.
 
-        This method anchors the POS patterns into strict regular expressions, filters out noisy n-grams using linguistic stopwords, and matches the remaining tagged n-grams against the active POS patterns. Finally, it aggregates the 
-        frequencies of identical matched candidate terms.
+        Args:
+            segments: A list of text segments to process.
+        '''
+        ngrams = []
 
-        Args: 
-            linguistic_patterns (list of str): A list of POS patterns.
-            ngrams_output (list[tuple]): A list of tuples containing the tagged n-grams, where each tuple is structured as (tagged_ngram_string, length,frequency).
-            minfreq (int, optional): The minimum frequency required for an n-gram to be considered a candidate term. Defaults to 2.
+        for segment in tagged_segments:  # will need to change when using yield in get_segments
+            tokenized_segment = segment.split()
+
+            raw_ngrams = self.preprocessor._compute_ngrams(tokenized_segment)
+
+            for raw_ngram in raw_ngrams:
+                filtered_ngram = self.preprocessor._filter_tagged_ngram(raw_ngram)
+
+                if filtered_ngram:
+                    ngrams.append(filtered_ngram)
+
+        self.preprocessor._calculate_ngrams_freq_dist(ngrams)
+
+    def _extract_candidates(self, translated_patterns):
+        '''
+        Extract candidate terms from the extracted n-grams according to the learned linguistic patterns and the minimum frequency threshold.
 
         Returns:
-            List of list: A list in which each inner list represents and exctracted candidate term. 
+            candidate_terms: A list of extracted candidate terms.
         '''
+        candidate_terms = []         
+        for ngram, freq in self.preprocessor.ngrams_freq_dist.most_common():
+            n = len(ngram.split())
 
-        processed_patterns=[]
-        controlpatterns=[]
+            if (freq >= self.min_freq
+            and n >= self.preprocessor.nmin
+            and n <= self.preprocessor.nmax):
 
-        for linguistic_pat in linguistic_patterns:
-                transformedpattern="^"+linguistic_pat+"$"
-                if not transformedpattern in controlpatterns:
-                    processed_patterns.append(transformedpattern)
-                    controlpatterns.append(transformedpattern)  
+                for pattern in translated_patterns:
+                    processed_pattern = f"^{pattern}$"
+                    match = re.fullmatch(processed_pattern, ngram)
 
-        raw_candidates=[]
-        for tupla in ngrams_output:
-            tagged_ngram = tupla[0]
-            n = tupla[1]
-            frequency = tupla[2]
+                    if match:
+                        candidate = " ".join(match.groups()[1:])
+                        candidate_terms.append((candidate, n, "frequency", freq))
+                        break
 
-            filtered_ngram = self.processor.filter_by_stopwords_linguistic(term=tagged_ngram)
-
-            if filtered_ngram is None:
-                continue
-
-            for pattern in processed_patterns:
-                match = re.search(pattern, tagged_ngram) 
-                if match:          
-                        if match.group(0) == tagged_ngram:
-                            candidate =" ".join(match.groups()[1:])
-                            raw_candidates.append((candidate, n, "frequency", frequency))
-                            break
-        
-        candidate_frequencies= Counter()
-        for candidate, n, _, frequency in raw_candidates: # underscore to ignore the third element "frequency" - not needed for aggregation
-            candidate_frequencies[candidate] += frequency # If the candidate already exists, aggregate its frequency
-        
-        # Generate and return the final data structure 
-        return [[term, len(term.split()), "frequency", freq] for term, freq in candidate_frequencies.items()]  # .items() yields (term, total_frequency) pairs from the Counter
-        
+        return candidate_terms

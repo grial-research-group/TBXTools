@@ -7,14 +7,14 @@ class PatternsLearning:
     def __init__(self): 
         pass
          
-    def learn_linguistic_patterns(self, outputfile, filtered_tagged_ngrams, showfrequencies=True, encoding="utf-8", verbose=False, representativity=100):
+    def learn_linguistic_patterns(self, outputfile, ngrams_for_patterns, showfrequencies=True, encoding="utf-8", verbose=False, representativity=100):
         '''
         Automatically extracts linguistic patterns from a collection of pre-filtered, POS-tagged n-grams. It sorts the patterns from most to least frequent and writes them to an external text file, using a percentage threshold (representativity) to discard rare patterns.
 
         Args:
 
         outputfile (str): The file path where the learned linguistic patterns will be saved.
-        filtered_tagged_ngrams (list of tuples): A collection of rows fetched from the database, where each tuple contains (tagged_ngram_string, n_size, frequency).
+        ngrams_for_patterns (list of tuples): A collection of rows fetched from the database, where each tuple contains (tagged_ngram_string, n_size, frequency).
         showfrequencies (bool, optional): If True, displays the pattern's frequency into the output file. Defaults to True.
         encoding (str, optional): Defaults to "utf-8".
         verbose (bool, optional): Defaults to False.
@@ -24,22 +24,21 @@ class PatternsLearning:
         
         learntpatterns (dict): A dictionary of learned patterns where keys are the generated rule strings (e.g., "|#|NOUN #||ADJ") and values are their corresponding frequencies.
         '''
-        
+        from tqdm import tqdm
         learntpatterns = {} # the key is the pattern and the value is its frequency
         acufreq = 0         # to accumulate the frequencies
 
-        results = filtered_tagged_ngrams #('health|health|NOUN professionals|professional|NOUN', 2, 7)- this is filtered tagged ngrams
-        if len(results) > 0: 
-            for tagged_ngram in results:
+        #('health|health|NOUN professionals|professional|NOUN', 7)- this is filtered tagged ngrams
+        if ngrams_for_patterns:
+            for tagged_ngram in tqdm(ngrams_for_patterns, total=len(ngrams_for_patterns), desc="Learning patterns"):
                 if not tagged_ngram:
                     continue                
-                try:
+                try:    
                     tagged_ngram_string = tagged_ngram[0]
-                    n = tagged_ngram[1]
-                    frequency = tagged_ngram[2]
+                    tagged_components = tagged_ngram_string.split() #['mental|mental|ADJ', 'disorders|disorder|NOUN']
+                    n = len(tagged_components)
+                    frequency = tagged_ngram[1]
                     
-                    tagged_components = tagged_ngram_string.split() ##['mental|mental|ADJ', 'disorders|disorder|NOUN']
-
                     if len(tagged_components) != n:
                         n = len(tagged_components)
 
@@ -86,7 +85,7 @@ class PatternsLearning:
 
         sorted_patterns = sorted(learntpatterns.items(), key=operator.itemgetter(1), reverse=True)
         acufreq2 = 0
-        
+
         with open(outputfile, "w", encoding=encoding) as f:
             if showfrequencies:
                 f.write("term\tfrequency\n")
@@ -94,8 +93,10 @@ class PatternsLearning:
                 f.write("term\n")
 
             for pattern, score in sorted_patterns:
+
                 if acufreq > 0:
                     percent = 100 * acufreq2 / acufreq
+
                     if percent > representativity:
                         break
                 acufreq2 += score  
@@ -104,9 +105,11 @@ class PatternsLearning:
                     output = pattern + "\t" + str(score)
                 else:
                     output = pattern
-        
+
                 f.write(output + "\n")
                 if verbose:
                     print(output)
+
+            print(f"Linguistic patterns saved in {outputfile}")
         
-        return learntpatterns
+        return sorted_patterns

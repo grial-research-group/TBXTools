@@ -2,38 +2,37 @@ from ..base import BaseMethodology
 from ..._results.results import Results
 from ..._processor.bert import BertProcessor
 from collections import Counter
-from ...trainer.metrics import Metrics
-#
+
 class BertMethodology(BaseMethodology):
     '''
     Manages terminology extraction with a BERT model.
 
     Attributes:
         model (str): Fine-tuned model for terminology extraction using labels.
-        labels (str): The labels used in the fine-tuning of the model.
+        labeling_scheme (str): The labels used in the fine-tuning of the model. Defaults to "BIO".
     '''
 
-    def __init__(self, model, labeling_scheme="BIO", golden_labels=None, analyze_false_positives=False):
+    def __init__(self, model, labeling_scheme="BIO", is_corpus_annotated=False):
         from transformers import logging
         logging.set_verbosity_error()
+
         self.name = "BertMethodology"
         self.model_name = model
-        self.golden_labels = golden_labels
-        self.analyze_false_positives = analyze_false_positives
-
-        self.processor = BertProcessor()
-        self.processor.choose_labels(labeling_scheme=labeling_scheme)
+        self.is_corpus_annotated = is_corpus_annotated
+        
+        self.processor = BertProcessor(methodology=self)
         self.extractor = None
+        self.processor.choose_labels(labeling_scheme=labeling_scheme)
 
     def run(self, segments, verbose=False):
         '''
-        Extracts candidate terms using a previously fine-tuned BERT model on automatically annotated data to predict terms.
+        Extracts candidate terms using a previously fine-tuned BERT model on annotated data to predict terms.
 
         Args:
             segments: A list of segments to process.
         
         Returns:
-            Results: An object containing the tokens, candidate terms. It also returns separately the tokenized corpus.
+            Results: An object containing the candidate terms and dataframe.
         '''
 
         from datasets import Dataset
@@ -41,11 +40,12 @@ class BertMethodology(BaseMethodology):
         print(f'\nInitializing model:  {self.model_name}', flush=True)
         self.processor.model_name = self.model_name
         
+        self.processor._set_filter_parameters()
         self.processor._load_model()
         self.processor._load_trainer()
         self.processor._load_tokenizer_and_data_collator()
             
-        dataframe = self.processor.preprocess_test(segments=segments)
+        dataframe = self.processor.preprocess_test(segments=segments, lang_code=self.extractor._lang_code)
         eval_data = Dataset.from_pandas(dataframe)
 
         print("\nPredicting terms")
@@ -83,16 +83,6 @@ class BertMethodology(BaseMethodology):
         clean_terms = self.processor.process_predictions(predicted_terms)
 
         dataframe['predicted_terms'] = clean_terms
-        if self.golden_labels:
-            from TBXTools.trainer.metrics import Metrics
-            metrics = Metrics()
-            print(f"EVALUATION ON DATASET")
-            print(metrics.compute_metrics_with_golden_labels(df=dataframe, gl=self.golden_labels))
-
-        if self.analyze_false_positives: # could this be implemented for all methodologies? like evaluate()
-            from TBXTools.trainer.metrics import Metrics
-            metrics = Metrics()
-            metrics.analyze_false_positives(df=dataframe, gl=self.golden_labels)
 
         #i dont remember why im doing this, but keep for now, otherwise it wont work
         clean_terms = dataframe['predicted_terms'].tolist()
@@ -106,11 +96,11 @@ class BertMethodology(BaseMethodology):
             if term:
                 n = len(term.split(" "))
                 candidate_terms.append((term, n, "count", count))
-        tokenized_segments = []
+        # tokenized_segments = []
 
-        results = Results(terms=candidate_terms)
+        results = Results(terms=candidate_terms, df=dataframe)
 
-        self.extractor._sqlite.insert_segments(data=tokenized_segments, tagged=False, tokenized=True)
+        # self.extractor._sqlite.insert_segments(data=tokenized_segments, tagged=False, tokenized=True)
         # old line, im not inserting tokens rn, need to check
         # self.extractor._sqlite.insert_tokens(data=results._tokens)
 

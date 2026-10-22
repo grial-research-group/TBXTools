@@ -1,5 +1,5 @@
-from TBXTools._processor.aligner import Aligner
-from TBXTools._utils.utils import get_lang
+from .._processor.aligner import Aligner
+from .._helpers.helpers import get_lang
 
 class BilingualResults:
     
@@ -34,7 +34,7 @@ class BilingualResults:
             model=model_name,
             threshold=threshold,
             synonym=synonym,
-            score=score,
+            score=score
         )
 
         return self.aligned_terms
@@ -47,7 +47,7 @@ class BilingualResults:
 
         Args:
             path: Path of the file to be saved.
-            reverse: (bool, optional): If True, swaps the column order and entries 
+            reverse: (bool, optional): If True, swaps the column order and entries.
             (target language first, source language second). Defaults to False.
         
         Raises:
@@ -64,30 +64,21 @@ class BilingualResults:
         if not candidate_terms:
             print("No aligned candidate terms to save.", flush=True)
             return
-
-        src_lang = self.src_lang
-        tgt_lang = self.tgt_lang
         
         synonym = self.synonym
 
-        _, src_iso = get_lang(str(src_lang).lower())
-        _, tgt_iso = get_lang(str(tgt_lang).lower())
-
-        src_iso = src_iso or str(src_lang).lower()
-        tgt_iso = tgt_iso or str(tgt_lang).lower()
-
         # REVERSE
         if reverse:
-            col_1_name = f"{tgt_iso}_tgt" if src_iso == tgt_iso else tgt_iso
-            col_2_name = f"{src_iso}_src" if src_iso == tgt_iso else src_iso
+            col_1_name = f"{self.tgt_lang}_tgt" if self.src_lang == self.tgt_lang else self.tgt_lang
+            col_2_name = f"{self.src_lang}_src" if self.src_lang == self.tgt_lang else self.src_lang
 
             formatted_terms = [
                 (row[1], row[0], row[2]) if len(row) >= 3 else (row[1], row[0])
                 for row in candidate_terms
             ]
         else:
-            col_1_name = f"{src_iso}_src" if src_iso == tgt_iso else src_iso
-            col_2_name = f"{tgt_iso}_tgt" if src_iso == tgt_iso else tgt_iso
+            col_1_name = f"{self.src_lang}_src" if self.src_lang == self.tgt_lang else self.src_lang
+            col_2_name = f"{self.tgt_lang}_tgt" if self.src_lang == self.tgt_lang else self.tgt_lang
 
             formatted_terms = candidate_terms
 

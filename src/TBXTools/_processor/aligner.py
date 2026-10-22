@@ -110,6 +110,3 @@ class Aligner:
             return flattened_results
 
         return results_list
-                
-        
-
