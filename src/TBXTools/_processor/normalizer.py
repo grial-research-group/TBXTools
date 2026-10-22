@@ -22,5 +22,6 @@ class Normalizer():
         normalized = normalized.replace("\xa0", " ")
         normalized = double_quotes.sub('"', normalized)
         normalized = normalized.translate(punct_table)
+        normalized = normalized.strip()
 
         return normalized

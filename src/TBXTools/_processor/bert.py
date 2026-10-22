@@ -5,7 +5,7 @@ import string
 
 class BertProcessor():
 
-    def __init__(self, methodology):
+    def __init__(self, methodology=None):
         self.methodology = methodology
         self.model_name = None
         self.stopwords = None
@@ -104,11 +104,11 @@ class BertProcessor():
         
         tagged_terms = self._lemmatize_and_annotate_terms(nlp, external_terms=external_terms)
         df["labels"] = self._annotate_corpus(df["lemmas"], tokenized_terms=tagged_terms)
-
+        
         return df
 
-    def preprocess_test(self, segments, lang_code):
-        spacy_model = get_spacy_model_from_code(lang_code)
+    def preprocess_test(self, segments, lang_code, spacy_model_size="sm"):
+        spacy_model = get_spacy_model_from_code(lang_code, size=spacy_model_size)
         nlp = load_spacy_model(spacy_model)
         word_tokens = []
 
@@ -130,6 +130,14 @@ class BertProcessor():
             })
 
         return df
+
+    def preprocess_annotated(self):
+        # word tokens (corpus should be tokenized, so we can do split())
+        # encode(word_tokens, is_split...=True)
+        # word_ids_list = [encoding.word_ids(i) for i in range(len(word_tokens))] # como arriba
+        # df con tokens, input_ids, att_mask, word_ids
+        # labels? CHECK preprocess_train
+        pass
             
     def _encode(self, segments, is_split_into_words=False):
         encoding = self.tokenizer(
