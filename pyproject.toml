@@ -22,7 +22,8 @@ bert = [
     "accelerate",
     "torch",
     "datasets",
-    "optuna"
+    "optuna",
+    "sentence-transformers"
 ]
 
 [tool.setuptools.packages.find]
