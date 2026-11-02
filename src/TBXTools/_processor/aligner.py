@@ -1,23 +1,25 @@
-import numpy as np
-from sentence_transformers import SentenceTransformer
-from scipy.optimize import linear_sum_assignment
-from collections import defaultdict
-
 class Aligner:
 
-    def align_words(self, src_list, tgt_list, model="sentence-transformers/LaBSE",threshold=0.75, synonym=False, score=True):
+    def __init__(self):
+        from sentence_transformers import SentenceTransformer
+
+        self.model_name = "sentence-transformers/LaBSE"
+        self.model = SentenceTransformer(self.model_name)
+
+    def align_words(self, src_list, tgt_list,threshold=0.75, synonym=False, score=True):
         '''
         Aligns source and target word lists using sentence embeddings.
 
         - Round 1 (Hungarian Algorithm) guarantees an optimal 1-to-1 mapping.
         - Rounds 2 & 3 (optional, when synonym=True) recover secondary translations/synonyms.
         '''
-        
-        model = SentenceTransformer(model)
+        import numpy as np
+        from scipy.optimize import linear_sum_assignment
+        from collections import defaultdict
 
         # Generate contextual embeddings for both language lists
-        src_vectors = model.encode(src_list, convert_to_numpy=True, show_progress_bar=False)
-        tgt_vectors = model.encode(tgt_list, convert_to_numpy=True, show_progress_bar=False)
+        src_vectors = self.model.encode(src_list, convert_to_numpy=True, show_progress_bar=False)
+        tgt_vectors = self.model.encode(tgt_list, convert_to_numpy=True, show_progress_bar=False)
 
         # Vectors normalization
         src_vectors = src_vectors / np.linalg.norm(
